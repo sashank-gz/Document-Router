@@ -1,0 +1,10 @@
+﻿fastapi
+uvicorn
+python-multipart
+pdfplumber
+requests
+pydantic
+pydantic-settings
+python-dotenv
+groq
+google-generativeai

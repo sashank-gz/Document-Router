@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Router Platform</title>
+    <meta name="description" content="Intelligent document classification and routing for insurance documents">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+    <!-- ── Navigation ─────────────────────────────────────── -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-brand">
+            <div class="nav-logo">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14,2 14,8 20,8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10,9 9,9 8,9"></polyline>
+                </svg>
+            </div>
+            <span class="nav-title">Document Router</span>
+            <span class="nav-version" id="nav-version">v2.0</span>
+        </div>
+        <div class="nav-status">
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-text" id="status-text">Connecting...</span>
+        </div>
+    </nav>
+
+    <!-- ── Main Content ───────────────────────────────────── -->
+    <main class="container">
+
+        <!-- Upload Section -->
+        <section class="section" id="upload-section">
+            <div class="section-header">
+                <h1>Upload Documents</h1>
+                <p class="section-subtitle">Drag and drop PDF files for automatic classification and routing</p>
+            </div>
+
+            <div class="upload-zone" id="upload-zone">
+                <div class="upload-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16,16 12,12 8,16"></polyline>
+                        <line x1="12" y1="12" x2="12" y2="21"></line>
+                        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
+                        <polyline points="16,16 12,12 8,16"></polyline>
+                    </svg>
+                </div>
+                <p class="upload-text">Drag & drop your PDF files here</p>
+                <p class="upload-hint">or click to browse • Supports multiple files</p>
+                <input type="file" id="file-input" multiple accept=".pdf" hidden>
+                <button class="btn btn-primary" id="browse-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17,8 12,3 7,8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    Browse Files
+                </button>
+            </div>
+
+            <!-- Upload Progress -->
+            <div class="upload-progress" id="upload-progress" hidden>
+                <div class="progress-header">
+                    <span class="progress-title" id="progress-title">Uploading...</span>
+                    <span class="progress-count" id="progress-count">0/0</span>
+                </div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progress-bar"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="section" id="results-section" hidden>
+            <div class="section-header">
+                <h2>Classification Results</h2>
+                <button class="btn btn-ghost" id="clear-results-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Clear
+                </button>
+            </div>
+            <div class="results-grid" id="results-grid"></div>
+        </section>
+
+        <!-- Jobs Section -->
+        <section class="section" id="jobs-section">
+            <div class="section-header">
+                <h2>Recent Jobs</h2>
+                <button class="btn btn-ghost" id="refresh-jobs-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23,4 23,10 17,10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="jobs-table" id="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>File</th>
+                            <th>Type</th>
+                            <th>Pipeline</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobs-tbody">
+                        <tr class="empty-row">
+                            <td colspan="6">No jobs yet — upload documents to get started</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ── Toast Notifications ────────────────────────────── -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

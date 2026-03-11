@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Iterable
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .models import JobRecord, JobStore
 from .router_engine import DocumentRouterEngine
@@ -20,6 +23,8 @@ UPLOADS_DIR = BASE_DIR / "uploads"
 PROCESSED_DIR = BASE_DIR / "processed"
 DB_PATH = BASE_DIR / "jobs.db"
 
+STATIC_DIR = BASE_DIR / "static"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -27,6 +32,18 @@ logging.basicConfig(
 logger = logging.getLogger("document-router")
 
 app = FastAPI(title="Document Router Platform", version="2.0.0")
+
+# Allow frontend to call the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve static assets (CSS, JS)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 job_store = JobStore(DB_PATH)
 router_engine = DocumentRouterEngine(
     job_store=job_store,
@@ -91,3 +108,9 @@ def get_job(job_id: int) -> JobRecord:
 def health_check() -> dict:
     """Simple health endpoint."""
     return {"status": "ok", "service": "document-router-platform", "version": "2.0.0"}
+
+
+@app.get("/")
+def serve_frontend() -> FileResponse:
+    """Serve the frontend UI."""
+    return FileResponse(STATIC_DIR / "index.html")

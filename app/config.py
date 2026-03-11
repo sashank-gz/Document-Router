@@ -42,6 +42,11 @@ GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 CLASSIFICATION_MAX_PAGES: int = int(os.getenv("CLASSIFICATION_MAX_PAGES", "3"))
 DEBUG_MODE: bool = _env_bool("DEBUG_MODE")
 
+# ── LLM tuning parameters ───────────────────────────────────────────
+LLM_MAX_TEXT_CHARS: int = int(os.getenv("LLM_MAX_TEXT_CHARS", "4000"))
+LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.0"))
+LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "150"))
+
 # ── Pipeline endpoints ───────────────────────────────────────────────
 PIPELINE_DRY_RUN: bool = _env_bool("PIPELINE_DRY_RUN")
 OCR_ENDPOINT: str = os.getenv("OCR_ENDPOINT", "http://ocr-service/process")

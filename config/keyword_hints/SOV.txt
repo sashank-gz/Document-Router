@@ -1,0 +1,7 @@
+# Phrases to look for INSIDE the document text (first page)
+# One phrase per line (case-insensitive)
+
+schedule of values
+property values
+location values
+building value

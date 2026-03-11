@@ -1,0 +1,8 @@
+# Keywords to look for in the FILE NAME
+# One keyword per line (case-insensitive)
+# Example: a file named "loss_run_2024.pdf" matches "loss"
+
+loss
+lossrun
+loss_run
+claim

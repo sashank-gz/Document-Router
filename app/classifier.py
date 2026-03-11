@@ -15,7 +15,9 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from .document_types import DocumentType, Pipeline, get_pipeline
+from .document_types import (
+    DocumentType, FILENAME_HINTS, KEYWORD_HINTS, Pipeline, get_pipeline,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,22 +35,13 @@ class ClassificationResult:
 
 # ── Tier 1: Filename hints ───────────────────────────────────────────
 
-FILENAME_HINTS: dict[DocumentType, tuple[str, ...]] = {
-    DocumentType.LOSS_RUN: ("loss", "lossrun", "loss_run", "claim"),
-    DocumentType.ACORD: ("acord",),
-    DocumentType.POLICY: ("policy",),
-    DocumentType.SOI: ("soi", "schedule of insurance", "schedule_of_insurance"),
-    DocumentType.SOV: ("sov", "schedule of value", "schedule_of_value"),
-    DocumentType.BINDER: ("binder",),
-    DocumentType.QUOTE: ("quote", "quotation"),
-}
-
 
 def _classify_by_filename(filename: str) -> Optional[ClassificationResult]:
     """Tier 1 – match document type by filename keywords."""
     name_lower = (filename or "").lower()
-    for doc_type, hints in FILENAME_HINTS.items():
+    for type_name, hints in FILENAME_HINTS.items():
         if any(hint in name_lower for hint in hints):
+            doc_type = DocumentType[type_name]
             return ClassificationResult(
                 document_type=doc_type,
                 pipeline=get_pipeline(doc_type),
@@ -59,38 +52,13 @@ def _classify_by_filename(filename: str) -> Optional[ClassificationResult]:
 
 # ── Tier 2: First-page text keyword hints ────────────────────────────
 
-KEYWORD_HINTS: dict[DocumentType, tuple[str, ...]] = {
-    DocumentType.LOSS_RUN: (
-        "claim number", "loss date", "total incurred", "loss run",
-    ),
-    DocumentType.ACORD: (
-        "acord", "accord form", "certificate of insurance",
-    ),
-    DocumentType.POLICY: (
-        "policy number", "policy holder", "coverage", "insured",
-        "effective date",
-    ),
-    DocumentType.SOI: (
-        "schedule of insurance", "scheduled items", "insured property",
-    ),
-    DocumentType.SOV: (
-        "schedule of values", "property values", "location values",
-        "building value",
-    ),
-    DocumentType.BINDER: (
-        "binder", "binding authority", "bound coverage",
-    ),
-    DocumentType.QUOTE: (
-        "quote", "quotation", "premium indication", "proposed premium",
-    ),
-}
-
 
 def _classify_by_keywords(text: str) -> Optional[ClassificationResult]:
     """Tier 2 – match document type by first-page text keywords."""
     text_lower = (text or "").lower()
-    for doc_type, hints in KEYWORD_HINTS.items():
+    for type_name, hints in KEYWORD_HINTS.items():
         if any(hint in text_lower for hint in hints):
+            doc_type = DocumentType[type_name]
             return ClassificationResult(
                 document_type=doc_type,
                 pipeline=get_pipeline(doc_type),

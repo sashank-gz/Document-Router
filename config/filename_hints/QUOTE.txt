@@ -1,0 +1,5 @@
+# Keywords to look for in the FILE NAME
+# One keyword per line (case-insensitive)
+
+quote
+quotation

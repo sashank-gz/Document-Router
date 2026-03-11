@@ -1,0 +1,17 @@
+# Which pipeline to use for each document type
+# Format:  DOCUMENT_TYPE = PIPELINE
+#
+# PIPELINE can be:
+#   OCR    - for structured/tabular documents
+#   LLM    - for unstructured/context-heavy documents
+#   MANUAL - for manual review
+#
+# To add a new type, just add a new line below.
+
+LOSS_RUN = OCR
+ACORD    = OCR
+POLICY   = LLM
+SOI      = LLM
+SOV      = LLM
+BINDER   = LLM
+QUOTE    = LLM

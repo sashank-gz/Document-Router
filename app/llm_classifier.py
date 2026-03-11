@@ -18,28 +18,29 @@ import re
 from typing import Optional
 
 from . import config
-from .document_types import DocumentType, Pipeline, get_pipeline
+from .document_types import DocumentType, Pipeline, SYSTEM_PROMPT_TEXT, get_pipeline, get_valid_types
 
 logger = logging.getLogger(__name__)
 
 
-# ── Prompt ───────────────────────────────────────────────────────────
+# ── Load LLM settings ───────────────────────────────────────────────
 
-_VALID_TYPES = [dt.value for dt in DocumentType if dt != DocumentType.UNKNOWN]
+_VALID_TYPES = get_valid_types()
+_MAX_TEXT_CHARS = int(config.LLM_MAX_TEXT_CHARS)
+_TEMPERATURE = float(config.LLM_TEMPERATURE)
+_MAX_TOKENS = int(config.LLM_MAX_TOKENS)
 
+# Build the full system prompt: user-editable part + auto-generated type list
 SYSTEM_PROMPT = (
-    "You are a document classification expert in the insurance industry. "
-    "Classify the document into exactly one of these types: "
-    f"{', '.join(_VALID_TYPES)}. "
-    "Respond with ONLY a JSON object — no markdown, no explanation.\n"
+    f"{SYSTEM_PROMPT_TEXT}\n"
+    f"Allowed types: {', '.join(_VALID_TYPES)}.\n"
     'Format: {"document_type": "<TYPE>", "confidence": <0.0-1.0>}'
 )
 
 
 def _build_user_prompt(text: str) -> str:
     """Build the user message containing the document text to classify."""
-    # Truncate to ~4000 chars to stay within free-tier token limits
-    truncated = text[:4000]
+    truncated = text[:_MAX_TEXT_CHARS]
     return (
         "Classify the following document text into one of these types: "
         f"{', '.join(_VALID_TYPES)}.\n\n"
@@ -91,8 +92,8 @@ def _call_groq(user_prompt: str) -> Optional[str]:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.0,
-        max_tokens=150,
+        temperature=_TEMPERATURE,
+        max_tokens=_MAX_TOKENS,
     )
     return response.choices[0].message.content
 
@@ -105,7 +106,7 @@ def _call_gemini(user_prompt: str) -> Optional[str]:
     model = genai.GenerativeModel(config.GEMINI_MODEL)
     response = model.generate_content(
         f"{SYSTEM_PROMPT}\n\n{user_prompt}",
-        generation_config={"temperature": 0.0, "max_output_tokens": 150},
+        generation_config={"temperature": _TEMPERATURE, "max_output_tokens": _MAX_TOKENS},
     )
     return response.text
 

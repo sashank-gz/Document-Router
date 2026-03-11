@@ -1,0 +1,8 @@
+# Phrases to look for INSIDE the document text (first page)
+# One phrase per line (case-insensitive)
+# Example: if page 1 contains "claim number", it matches
+
+claim number
+loss date
+total incurred
+loss run

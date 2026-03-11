@@ -1,26 +1,65 @@
 """
 Document type definitions and route mapping.
 
-Single source of truth for all supported document types and which
-extraction pipeline each one should be routed to.
+Loads all document types and pipeline routes from the config/ folder:
+  - config/routes.txt          → document type → pipeline mapping
+  - config/filename_hints/*.txt → loaded by classifier.py
+  - config/keyword_hints/*.txt  → loaded by classifier.py
+  - config/prompt.txt          → loaded by llm_classifier.py
 """
 
 from __future__ import annotations
 
+import logging
 from enum import Enum
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 
 
-class DocumentType(str, Enum):
-    """All document types the platform can classify."""
+def _read_lines(file_path: Path) -> list[str]:
+    """Read a text file and return non-empty, non-comment lines."""
+    lines: list[str] = []
+    with file_path.open("r", encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if line and not line.startswith("#"):
+                lines.append(line)
+    return lines
 
-    LOSS_RUN = "LOSS_RUN"
-    POLICY = "POLICY"
-    ACORD = "ACORD"
-    SOI = "SOI"
-    SOV = "SOV"
-    BINDER = "BINDER"
-    QUOTE = "QUOTE"
-    UNKNOWN = "UNKNOWN"
+
+def _load_routes() -> dict[str, str]:
+    """Parse config/routes.txt → {TYPE_NAME: PIPELINE}."""
+    routes: dict[str, str] = {}
+    routes_file = CONFIG_DIR / "routes.txt"
+    for line in _read_lines(routes_file):
+        if "=" in line:
+            type_name, pipeline = line.split("=", 1)
+            routes[type_name.strip().upper()] = pipeline.strip().upper()
+    return routes
+
+
+def _load_hints(folder_name: str) -> dict[str, list[str]]:
+    """Load all .txt files from a hints folder → {TYPE_NAME: [hints]}."""
+    hints: dict[str, list[str]] = {}
+    hints_dir = CONFIG_DIR / folder_name
+    if not hints_dir.exists():
+        return hints
+    for txt_file in sorted(hints_dir.glob("*.txt")):
+        type_name = txt_file.stem.upper()
+        hints[type_name] = _read_lines(txt_file)
+    return hints
+
+
+def _load_prompt() -> str:
+    """Load the LLM system prompt from config/prompt.txt."""
+    prompt_file = CONFIG_DIR / "prompt.txt"
+    return "\n".join(_read_lines(prompt_file))
+
+
+# ── Pipeline enum ────────────────────────────────────────────────────
 
 
 class Pipeline(str, Enum):
@@ -31,20 +70,41 @@ class Pipeline(str, Enum):
     MANUAL = "MANUAL"
 
 
-# Maps each document type to the pipeline that should process it.
-# Add new types here — the rest of the app reads from this mapping.
-ROUTE_MAP: dict[DocumentType, Pipeline] = {
-    DocumentType.LOSS_RUN: Pipeline.OCR,
-    DocumentType.ACORD: Pipeline.OCR,
-    DocumentType.POLICY: Pipeline.LLM,
-    DocumentType.SOI: Pipeline.LLM,
-    DocumentType.SOV: Pipeline.LLM,
-    DocumentType.BINDER: Pipeline.LLM,
-    DocumentType.QUOTE: Pipeline.LLM,
-    DocumentType.UNKNOWN: Pipeline.MANUAL,
-}
+# ── Load everything from config/ at import time ─────────────────────
+
+_routes = _load_routes()
+
+# Build document types dynamically from routes.txt
+_type_names = {name: name for name in _routes}
+_type_names["UNKNOWN"] = "UNKNOWN"
+
+DocumentType = Enum("DocumentType", {k: k for k in _type_names}, type=str)  # type: ignore[misc]
+
+# Build route map
+ROUTE_MAP: dict = {}
+for name, pipeline_str in _routes.items():
+    ROUTE_MAP[DocumentType[name]] = Pipeline(pipeline_str)
+ROUTE_MAP[DocumentType["UNKNOWN"]] = Pipeline.MANUAL
+
+# Pre-load hints and prompt
+FILENAME_HINTS: dict[str, list[str]] = _load_hints("filename_hints")
+KEYWORD_HINTS: dict[str, list[str]] = _load_hints("keyword_hints")
+SYSTEM_PROMPT_TEXT: str = _load_prompt()
+
+logger.info(
+    "Config loaded: %d document types, %d filename hint files, %d keyword hint files",
+    len(_routes), len(FILENAME_HINTS), len(KEYWORD_HINTS),
+)
 
 
-def get_pipeline(document_type: DocumentType) -> Pipeline:
+# ── Public helpers ───────────────────────────────────────────────────
+
+
+def get_pipeline(document_type) -> Pipeline:
     """Look up the pipeline for a given document type."""
     return ROUTE_MAP.get(document_type, Pipeline.MANUAL)
+
+
+def get_valid_types() -> list[str]:
+    """Return all valid document type names (excluding UNKNOWN)."""
+    return [dt.value for dt in DocumentType if dt.value != "UNKNOWN"]

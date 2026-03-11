@@ -1,0 +1,7 @@
+# Phrases to look for INSIDE the document text (first page)
+# One phrase per line (case-insensitive)
+
+quote
+quotation
+premium indication
+proposed premium

@@ -118,9 +118,9 @@ class DocumentRouterEngine:
                 result["classification_tier"] = classification.tier
                 result["confidence"] = classification.confidence
                 if classification.pipeline == Pipeline.OCR:
-                    result["pipeline_url"] = config.OCR_ENDPOINT
+                    result["pipeline_url"] = config.OCR_UI_URL
                 elif classification.pipeline == Pipeline.LLM:
-                    result["pipeline_url"] = config.LLM_ENDPOINT
+                    result["pipeline_url"] = config.LLM_UI_URL
             return result
 
         except Exception as exc:
@@ -138,9 +138,9 @@ class DocumentRouterEngine:
                 result["classification_tier"] = classification.tier
                 result["confidence"] = classification.confidence
                 if classification.pipeline == Pipeline.OCR:
-                    result["pipeline_url"] = config.OCR_ENDPOINT
+                    result["pipeline_url"] = config.OCR_UI_URL
                 elif classification.pipeline == Pipeline.LLM:
-                    result["pipeline_url"] = config.LLM_ENDPOINT
+                    result["pipeline_url"] = config.LLM_UI_URL
             return result
 
     # ── Helpers ──────────────────────────────────────────────────
@@ -166,9 +166,21 @@ class DocumentRouterEngine:
         }
         # Include the service URL so the frontend can link to it
         if classification.pipeline == Pipeline.OCR:
-            result["pipeline_url"] = config.OCR_ENDPOINT
+            url = config.OCR_UI_URL
+            if pipeline_result and isinstance(pipeline_result.get("response"), dict):
+                remote_file = pipeline_result["response"].get("filename")
+                if remote_file:
+                    sep = "&" if "?" in url else "?"
+                    url = f"{url}{sep}file={remote_file}"
+            result["pipeline_url"] = url
         elif classification.pipeline == Pipeline.LLM:
-            result["pipeline_url"] = config.LLM_ENDPOINT
+            url = config.LLM_UI_URL
+            if pipeline_result and isinstance(pipeline_result.get("response"), dict):
+                remote_file = pipeline_result["response"].get("filename")
+                if remote_file:
+                    sep = "&" if "?" in url else "?"
+                    url = f"{url}{sep}file={remote_file}"
+            result["pipeline_url"] = url
         if message:
             result["message"] = message
         if pipeline_result:

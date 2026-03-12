@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=3">
 </head>
 
 <body>
@@ -134,17 +134,15 @@
 
             <!-- Pagination -->
             <div class="pagination" id="pagination" hidden>
-                <button class="btn btn-ghost pagination-btn" id="prev-page-btn" disabled>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                <button class="btn btn-ghost pagination-btn" id="prev-page-btn" disabled title="Previous Page">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15,18 9,12 15,6"></polyline>
                     </svg>
-                    Previous
                 </button>
-                <span class="pagination-info" id="pagination-info">Page 1 of 1</span>
-                <button class="btn btn-ghost pagination-btn" id="next-page-btn" disabled>
-                    Next
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                <div class="pagination-numbers" id="pagination-numbers"></div>
+                <button class="btn btn-ghost pagination-btn" id="next-page-btn" disabled title="Next Page">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9,6 15,12 9,18"></polyline>
                     </svg>
@@ -157,7 +155,7 @@
     <!-- ── Toast Notifications ────────────────────────────── -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=2"></script>
 </body>
 
 </html>

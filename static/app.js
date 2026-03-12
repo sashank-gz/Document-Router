@@ -232,7 +232,7 @@ let allJobs = [];
 let currentPage = 1;
 
 const paginationEl = document.getElementById("pagination");
-const paginationInfo = document.getElementById("pagination-info");
+const paginationNumbers = document.getElementById("pagination-numbers");
 const prevPageBtn = document.getElementById("prev-page-btn");
 const nextPageBtn = document.getElementById("next-page-btn");
 
@@ -298,9 +298,48 @@ function renderJobsPage() {
 
     // Update pagination controls
     paginationEl.hidden = totalPages <= 1;
-    paginationInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+    renderPagination(totalPages, currentPage);
     prevPageBtn.disabled = currentPage <= 1;
     nextPageBtn.disabled = currentPage >= totalPages;
+}
+
+function renderPagination(totalPages, current) {
+    paginationNumbers.innerHTML = "";
+
+    const pages = [];
+    const delta = 2; // Number of pages before/after current
+
+    for (let i = 1; i <= totalPages; i++) {
+        if (
+            i === 1 ||
+            i === totalPages ||
+            (i >= current - delta && i <= current + delta)
+        ) {
+            pages.push(i);
+        } else if (pages[pages.length - 1] !== "...") {
+            pages.push("...");
+        }
+    }
+
+    pages.forEach(p => {
+        if (p === "...") {
+            const span = document.createElement("span");
+            span.className = "pagination-ellipsis";
+            span.textContent = "...";
+            paginationNumbers.appendChild(span);
+        } else {
+            const btn = document.createElement("button");
+            btn.className = `page-btn ${p === current ? "active" : ""}`;
+            btn.textContent = p;
+            btn.onclick = () => {
+                if (p !== current) {
+                    currentPage = p;
+                    renderJobsPage();
+                }
+            };
+            paginationNumbers.appendChild(btn);
+        }
+    });
 }
 
 prevPageBtn.addEventListener("click", () => {

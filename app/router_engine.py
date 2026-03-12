@@ -80,11 +80,13 @@ class DocumentRouterEngine:
                 self.job_store.update_job(job_id, status="ROUTED")
                 processed_path = move_to_processed(saved_path, self.processed_dir)
                 self.job_store.update_job(job_id, status="COMPLETED")
-                return self._build_result(
+                res = self._build_result(
                     job_id, processed_path, classification,
                     message="Routed to manual review queue",
                     debug_info=debug_info,
                 )
+                self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
+                return res
 
             self.job_store.update_job(job_id, status="ROUTED")
             self.job_store.update_job(job_id, status="PROCESSING")
@@ -96,11 +98,13 @@ class DocumentRouterEngine:
 
             processed_path = move_to_processed(saved_path, self.processed_dir)
             self.job_store.update_job(job_id, status="COMPLETED")
-            return self._build_result(
+            res = self._build_result(
                 job_id, processed_path, classification,
                 pipeline_result=pipeline_result,
                 debug_info=debug_info,
             )
+            self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
+            return res
 
         except PipelineError as exc:
             logger.exception("Pipeline processing failed: file=%s", saved_path.name)
@@ -121,6 +125,8 @@ class DocumentRouterEngine:
                     result["pipeline_url"] = config.OCR_UI_URL
                 elif classification.pipeline == Pipeline.LLM:
                     result["pipeline_url"] = config.LLM_UI_URL
+            
+            self.job_store.update_job(job_id, pipeline_url=result.get("pipeline_url"))
             return result
 
         except Exception as exc:
@@ -141,6 +147,8 @@ class DocumentRouterEngine:
                     result["pipeline_url"] = config.OCR_UI_URL
                 elif classification.pipeline == Pipeline.LLM:
                     result["pipeline_url"] = config.LLM_UI_URL
+            
+            self.job_store.update_job(job_id, pipeline_url=result.get("pipeline_url"))
             return result
 
     # ── Helpers ──────────────────────────────────────────────────

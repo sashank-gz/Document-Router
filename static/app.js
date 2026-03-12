@@ -273,6 +273,16 @@ function renderJobsPage() {
         const statusClass = (job.status || "").toLowerCase();
         const created = job.created_at ? new Date(job.created_at).toLocaleString() : "—";
 
+        let actionHtml = "—";
+        if (job.pipeline_url) {
+            const btnClass = job.route === "OCR" ? "btn-open-ocr" : "btn-open-llm";
+            actionHtml = `
+                <a href="${job.pipeline_url}" target="_blank" rel="noopener" class="btn-open ${btnClass}">
+                    Open
+                </a>
+            `;
+        }
+
         return `
             <tr>
                 <td>${job.id}</td>
@@ -281,6 +291,7 @@ function renderJobsPage() {
                 <td><span class="badge badge-${pipelineClass}">${job.route || "—"}</span></td>
                 <td><span class="badge badge-status ${statusClass}">${job.status || "—"}</span></td>
                 <td>${created}</td>
+                <td class="action-cell">${actionHtml}</td>
             </tr>
         `;
     }).join("");

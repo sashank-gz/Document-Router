@@ -14,6 +14,7 @@ class JobRecord(BaseModel):
     route: str
     status: str
     created_at: str
+    pipeline_url: Optional[str] = None
 
 
 class JobStore:
@@ -34,11 +35,20 @@ class JobStore:
                     file_name TEXT NOT NULL,
                     route TEXT NOT NULL,
                     status TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    pipeline_url TEXT
                 )
                 """
             )
             conn.commit()
+
+            # Quick migration for existing databases
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN pipeline_url TEXT")
+                conn.commit()
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
 
     def create_job(self, file_name: str, route: str, status: str) -> int:
         created_at = datetime.now(timezone.utc).isoformat()
@@ -50,7 +60,13 @@ class JobStore:
             conn.commit()
             return int(cursor.lastrowid)
 
-    def update_job(self, job_id: int, route: Optional[str] = None, status: Optional[str] = None) -> None:
+    def update_job(
+        self,
+        job_id: int,
+        route: Optional[str] = None,
+        status: Optional[str] = None,
+        pipeline_url: Optional[str] = None
+    ) -> None:
         updates = []
         params = []
 
@@ -61,6 +77,10 @@ class JobStore:
         if status is not None:
             updates.append("status = ?")
             params.append(status)
+
+        if pipeline_url is not None:
+            updates.append("pipeline_url = ?")
+            params.append(pipeline_url)
 
         if not updates:
             return
@@ -74,13 +94,13 @@ class JobStore:
 
     def list_jobs(self) -> list[JobRecord]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT id, file_name, route, status, created_at FROM jobs ORDER BY id DESC").fetchall()
+            rows = conn.execute("SELECT id, file_name, route, status, created_at, pipeline_url FROM jobs ORDER BY id DESC").fetchall()
         return [JobRecord(**dict(row)) for row in rows]
 
     def get_job(self, job_id: int) -> Optional[JobRecord]:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, file_name, route, status, created_at FROM jobs WHERE id = ?",
+                "SELECT id, file_name, route, status, created_at, pipeline_url FROM jobs WHERE id = ?",
                 (job_id,),
             ).fetchone()
 

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
+from . import config
+from .document_types import Pipeline
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -89,10 +91,26 @@ async def upload_documents(files: list[UploadFile] = File(...)) -> dict:
     return {"count": len(results), "results": results}
 
 
+def _enrich_job(job: JobRecord) -> JobRecord:
+    """Add pipeline_url to a JobRecord based on its route and status."""
+    if job.status == "COMPLETED" and not job.pipeline_url:
+        if job.route == Pipeline.OCR.value:
+            url = config.OCR_UI_URL
+            # Note: Falling back to job.file_name is risky for OCR due to timestamping
+            sep = "&" if "?" in url else "?"
+            job.pipeline_url = f"{url}{sep}file={job.file_name}"
+        elif job.route == Pipeline.LLM.value:
+            url = config.LLM_UI_URL
+            sep = "&" if "?" in url else "?"
+            job.pipeline_url = f"{url}{sep}file={job.file_name}"
+    return job
+
+
 @app.get("/jobs", response_model=list[JobRecord])
-def list_jobs() -> Iterable[JobRecord]:
+def list_jobs() -> list[JobRecord]:
     """Return all tracked jobs, newest first."""
-    return job_store.list_jobs()
+    jobs = job_store.list_jobs()
+    return [_enrich_job(j) for j in jobs]
 
 
 @app.get("/jobs/{job_id}", response_model=JobRecord)
@@ -101,7 +119,7 @@ def get_job(job_id: int) -> JobRecord:
     job = job_store.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return _enrich_job(job)
 
 
 @app.get("/health")

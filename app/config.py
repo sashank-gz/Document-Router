@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 # Load .env from project root
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(_ENV_PATH)
+load_dotenv(_ENV_PATH, override=True)
 
 
 def _env_bool(key: str, default: bool = False) -> bool:

@@ -40,6 +40,8 @@ class DocumentRouterEngine:
             file_name=saved_path.name, route="UNKNOWN", status="UPLOADED",
         )
 
+        classification = None
+        debug_info = {}
         try:
             # ── Classify ─────────────────────────────────────────
             first_page_text = extract_first_page_text(saved_path)
@@ -103,12 +105,43 @@ class DocumentRouterEngine:
         except PipelineError as exc:
             logger.exception("Pipeline processing failed: file=%s", saved_path.name)
             self.job_store.update_job(job_id, status="FAILED")
-            return {"job_id": job_id, "file_name": saved_path.name, "status": "FAILED", "error": str(exc)}
+            result = {
+                "job_id": job_id,
+                "file_name": saved_path.name,
+                "status": "FAILED",
+                "error": str(exc),
+            }
+            # Include classification data if available
+            if classification:
+                result["document_type"] = classification.document_type.value
+                result["pipeline"] = classification.pipeline.value
+                result["classification_tier"] = classification.tier
+                result["confidence"] = classification.confidence
+                if classification.pipeline == Pipeline.OCR:
+                    result["pipeline_url"] = config.OCR_ENDPOINT
+                elif classification.pipeline == Pipeline.LLM:
+                    result["pipeline_url"] = config.LLM_ENDPOINT
+            return result
 
         except Exception as exc:
             logger.exception("Routing failed: file=%s", saved_path.name)
             self.job_store.update_job(job_id, status="FAILED")
-            return {"job_id": job_id, "file_name": saved_path.name, "status": "FAILED", "error": str(exc)}
+            result = {
+                "job_id": job_id,
+                "file_name": saved_path.name,
+                "status": "FAILED",
+                "error": str(exc),
+            }
+            if classification:
+                result["document_type"] = classification.document_type.value
+                result["pipeline"] = classification.pipeline.value
+                result["classification_tier"] = classification.tier
+                result["confidence"] = classification.confidence
+                if classification.pipeline == Pipeline.OCR:
+                    result["pipeline_url"] = config.OCR_ENDPOINT
+                elif classification.pipeline == Pipeline.LLM:
+                    result["pipeline_url"] = config.LLM_ENDPOINT
+            return result
 
     # ── Helpers ──────────────────────────────────────────────────
 
@@ -131,6 +164,11 @@ class DocumentRouterEngine:
             "confidence": classification.confidence,
             "status": "COMPLETED",
         }
+        # Include the service URL so the frontend can link to it
+        if classification.pipeline == Pipeline.OCR:
+            result["pipeline_url"] = config.OCR_ENDPOINT
+        elif classification.pipeline == Pipeline.LLM:
+            result["pipeline_url"] = config.LLM_ENDPOINT
         if message:
             result["message"] = message
         if pipeline_result:

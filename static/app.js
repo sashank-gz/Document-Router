@@ -168,6 +168,21 @@ function displayResults(results) {
             `;
         }
 
+        let openBtnHtml = "";
+        if (r.pipeline_url) {
+            const btnClass = pipelineClass === "ocr" ? "btn-open-ocr" : "btn-open-llm";
+            openBtnHtml = `
+                <a href="${r.pipeline_url}" target="_blank" rel="noopener" class="btn btn-open ${btnClass}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15,3 21,3 21,9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                    Open in ${r.pipeline || "Service"}
+                </a>
+            `;
+        }
+
         card.innerHTML = `
             <div class="result-info">
                 <div class="result-filename">${escapeHtml(r.file_name || "Unknown")}</div>
@@ -186,6 +201,7 @@ function displayResults(results) {
                 ${r.message ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(r.message)}</div>` : ""}
             </div>
             <div class="result-badges">
+                ${openBtnHtml}
                 <span class="badge badge-status ${(r.status || "").toLowerCase()}">${r.status || "—"}</span>
                 <span style="font-size: 0.7rem; color: var(--text-muted);">Job #${r.job_id || "—"}</span>
             </div>
@@ -210,29 +226,49 @@ clearResultsBtn.addEventListener("click", () => {
     resultsSection.hidden = true;
 });
 
-// ── Jobs table ────────────────────────────────────────────────
+// ── Jobs table with pagination ────────────────────────────────
+const JOBS_PER_PAGE = 5;
+let allJobs = [];
+let currentPage = 1;
+
+const paginationEl = document.getElementById("pagination");
+const paginationInfo = document.getElementById("pagination-info");
+const prevPageBtn = document.getElementById("prev-page-btn");
+const nextPageBtn = document.getElementById("next-page-btn");
+
 async function loadJobs() {
     try {
         const res = await fetch(`${API_BASE}/jobs`);
         if (!res.ok) throw new Error("Failed to load jobs");
-        const jobs = await res.json();
-        renderJobs(jobs);
+        allJobs = await res.json();
+        currentPage = 1;
+        renderJobsPage();
     } catch {
         // silent fail — table stays as-is
     }
 }
 
-function renderJobs(jobs) {
-    if (jobs.length === 0) {
+function renderJobsPage() {
+    const totalPages = Math.max(1, Math.ceil(allJobs.length / JOBS_PER_PAGE));
+
+    // Clamp current page
+    if (currentPage < 1) currentPage = 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * JOBS_PER_PAGE;
+    const pageJobs = allJobs.slice(start, start + JOBS_PER_PAGE);
+
+    if (allJobs.length === 0) {
         jobsTbody.innerHTML = `
             <tr class="empty-row">
                 <td colspan="6">No jobs yet — upload documents to get started</td>
             </tr>
         `;
+        paginationEl.hidden = true;
         return;
     }
 
-    jobsTbody.innerHTML = jobs.map(job => {
+    jobsTbody.innerHTML = pageJobs.map(job => {
         const pipelineClass = (job.route || "MANUAL").toLowerCase();
         const statusClass = (job.status || "").toLowerCase();
         const created = job.created_at ? new Date(job.created_at).toLocaleString() : "—";
@@ -248,7 +284,28 @@ function renderJobs(jobs) {
             </tr>
         `;
     }).join("");
+
+    // Update pagination controls
+    paginationEl.hidden = totalPages <= 1;
+    paginationInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+    prevPageBtn.disabled = currentPage <= 1;
+    nextPageBtn.disabled = currentPage >= totalPages;
 }
+
+prevPageBtn.addEventListener("click", () => {
+    if (currentPage > 1) {
+        currentPage--;
+        renderJobsPage();
+    }
+});
+
+nextPageBtn.addEventListener("click", () => {
+    const totalPages = Math.ceil(allJobs.length / JOBS_PER_PAGE);
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderJobsPage();
+    }
+});
 
 refreshJobsBtn.addEventListener("click", () => {
     loadJobs();
@@ -268,3 +325,4 @@ loadJobs();
 
 // Periodically check health
 setInterval(checkHealth, 30000);
+

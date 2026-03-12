@@ -59,6 +59,20 @@ def _load_prompt() -> str:
     return "\n".join(_read_lines(prompt_file))
 
 
+def _load_settings() -> dict[str, str]:
+    """Load key-value settings from config/settings.txt."""
+    settings: dict[str, str] = {}
+    settings_file = CONFIG_DIR / "settings.txt"
+    if not settings_file.exists():
+        return settings
+
+    for line in _read_lines(settings_file):
+        if "=" in line:
+            key, val = line.split("=", 1)
+            settings[key.strip().upper()] = val.strip()
+    return settings
+
+
 # ── Pipeline enum ────────────────────────────────────────────────────
 
 
@@ -86,14 +100,15 @@ for name, pipeline_str in _routes.items():
     ROUTE_MAP[DocumentType[name]] = Pipeline(pipeline_str)
 ROUTE_MAP[DocumentType["UNKNOWN"]] = Pipeline.MANUAL
 
-# Pre-load hints and prompt
+# Pre-load hints, prompt, and settings
 FILENAME_HINTS: dict[str, list[str]] = _load_hints("filename_hints")
 KEYWORD_HINTS: dict[str, list[str]] = _load_hints("keyword_hints")
 SYSTEM_PROMPT_TEXT: str = _load_prompt()
+SETTINGS: dict[str, str] = _load_settings()
 
 logger.info(
-    "Config loaded: %d document types, %d filename hint files, %d keyword hint files",
-    len(_routes), len(FILENAME_HINTS), len(KEYWORD_HINTS),
+    "Config loaded: %d document types, %d filename hint files, %d keyword hint files, %d settings",
+    len(_routes), len(FILENAME_HINTS), len(KEYWORD_HINTS), len(SETTINGS)
 )
 
 

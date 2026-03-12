@@ -14,7 +14,7 @@ from . import config
 from .classifier import classify_document
 from .document_types import Pipeline
 from .file_service import (
-    extract_first_page_text,
+    extract_classification_text,
     extract_pages_text,
     move_to_processed,
     save_upload_file,
@@ -44,10 +44,10 @@ class DocumentRouterEngine:
         debug_info = {}
         try:
             # ── Classify ─────────────────────────────────────────
-            first_page_text = extract_first_page_text(saved_path)
+            # Tier 2 text (multi-page based on config/settings.txt)
+            tier_2_text = extract_classification_text(saved_path)
 
-            # Multi-page text for Tier 3 (LLM) — only extract if
-            # the file has more than one page and an LLM provider is enabled.
+            # Multi-page text for Tier 3 (LLM) — wider scope
             multi_page_text = None
             if config.GROQ_ENABLED or config.GEMINI_ENABLED:
                 multi_page_text = extract_pages_text(
@@ -56,8 +56,8 @@ class DocumentRouterEngine:
 
             classification, debug_info = classify_document(
                 filename=saved_path.name,
-                first_page_text=first_page_text,
-                multi_page_text=multi_page_text,
+                keyword_text=tier_2_text,
+                llm_text=multi_page_text,
             )
 
             self.job_store.update_job(

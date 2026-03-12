@@ -33,9 +33,10 @@ async def save_upload_file(upload_file: UploadFile, uploads_dir: Path) -> Path:
     return destination
 
 
-def extract_first_page_text(file_path: Path) -> str:
-    """Extract text from the first page only (used for Tier 2 keyword matching)."""
-    return extract_pages_text(file_path, max_pages=1)
+def extract_classification_text(file_path: Path) -> str:
+    """Extract text for classification (Tier 2). Uses customizable page count."""
+    from . import config
+    return extract_pages_text(file_path, max_pages=config.KEYWORD_SCAN_MAX_PAGES)
 
 
 def extract_pages_text(file_path: Path, max_pages: int = 3) -> str:

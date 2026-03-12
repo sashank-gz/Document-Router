@@ -70,80 +70,99 @@ def _classify_by_keywords(text: str) -> Optional[ClassificationResult]:
 # ── Orchestrator ─────────────────────────────────────────────────────
 
 
+# ── Orchestrator ─────────────────────────────────────────────────────
+
+
 def classify_document(
     filename: str,
-    first_page_text: str,
-    multi_page_text: Optional[str] = None,
+    keyword_text: str,
+    llm_text: Optional[str] = None,
 ) -> tuple[ClassificationResult, dict]:
     """
-    Run the 3-tier classification pipeline and return the first match.
+    Run the 3-tier classification pipeline with conflict resolution.
 
-    Returns
-    -------
-    (ClassificationResult, debug_info)
-        debug_info is populated only when DEBUG_MODE is enabled.
+    - Tier 1 (Filename) and Tier 2 (Keywords) are evaluated together.
+    - If they disagree, Tier 3 (LLM) acts as the tie-breaker.
+    - Confidence scores are weighted based on config/settings.txt.
     """
     from . import config
 
     debug: dict = {}
-
     if config.DEBUG_MODE:
-        debug["extracted_text_page_1"] = first_page_text[:2000] if first_page_text else ""
-        debug["extracted_text_multi_page"] = multi_page_text[:4000] if multi_page_text else None
+        debug["tier_2_text_input"] = keyword_text[:2000] if keyword_text else ""
+        debug["tier_3_text_input"] = llm_text[:4000] if llm_text else None
 
-    # Tier 1 — filename
-    result = _classify_by_filename(filename)
-    if config.DEBUG_MODE:
-        debug["tier_1_filename"] = {
-            "checked": filename,
-            "result": result.document_type.value if result else None,
-        }
-    if result:
-        logger.info("Tier 1 (filename) matched: %s → %s", filename, result.document_type.value)
-        if config.DEBUG_MODE:
-            debug["tier_2_keyword"] = "skipped (matched at tier 1)"
-            debug["tier_3_llm"] = "skipped (matched at tier 1)"
-        return result, debug
+    # 1. Evaluate Tier 1 (Filename)
+    t1_result = _classify_by_filename(filename)
+    if t1_result:
+        t1_result.confidence = config.CONFIDENCE_FILENAME
 
-    # Tier 2 — keyword
-    result = _classify_by_keywords(first_page_text)
-    if config.DEBUG_MODE:
-        debug["tier_2_keyword"] = {
-            "text_length": len(first_page_text) if first_page_text else 0,
-            "result": result.document_type.value if result else None,
-        }
-    if result:
-        logger.info("Tier 2 (keyword) matched: %s → %s", filename, result.document_type.value)
-        if config.DEBUG_MODE:
-            debug["tier_3_llm"] = "skipped (matched at tier 2)"
-        return result, debug
+    # 2. Evaluate Tier 2 (Keywords)
+    t2_result = _classify_by_keywords(keyword_text)
+    if t2_result:
+        t2_result.confidence = config.CONFIDENCE_KEYWORD
 
-    # Tier 3 — LLM (lazy import to avoid loading heavy deps unless needed)
-    llm_text = multi_page_text or first_page_text
-    if llm_text and llm_text.strip():
+    # 3. Conflict Resolution
+    result: Optional[ClassificationResult] = None
+
+    # Case A: Both match
+    if t1_result and t2_result:
+        if t1_result.document_type == t2_result.document_type:
+            logger.info("Tiers 1 & 2 agree: %s", t1_result.document_type.value)
+            result = t2_result  # Higher confidence wins
+        else:
+            logger.warning(
+                "CONFLICT: Filename says %s, Keywords say %s. Triggering Tie-breaker (Tier 3).",
+                t1_result.document_type.value,
+                t2_result.document_type.value
+            )
+            debug["conflict_detected"] = {
+                "tier_1": t1_result.document_type.value,
+                "tier_2": t2_result.document_type.value,
+            }
+
+    # Case B: Only one matches
+    elif t1_result or t2_result:
+        result = t1_result or t2_result
+        logger.info("Single-tier match: %s (Tier: %s)", result.document_type.value, result.tier)
+
+    # 4. Tier 3 (LLM) - Tie-breaker OR Fallback
+    # Triggered if: 
+    # a) No match yet 
+    # b) Conflict detected between T1 and T2
+    is_conflict = (t1_result and t2_result and t1_result.document_type != t2_result.document_type)
+    
+    if (not result or is_conflict) and llm_text and llm_text.strip():
         try:
             from .llm_classifier import classify_with_llm
-
-            result, llm_debug = classify_with_llm(llm_text)
+            llm_result, llm_debug = classify_with_llm(llm_text)
+            
             if config.DEBUG_MODE:
                 debug["tier_3_llm"] = llm_debug
-            if result:
-                logger.info("Tier 3 (LLM) matched: %s → %s", filename, result.document_type.value)
-                return result, debug
+            
+            if llm_result:
+                logger.info("Tier 3 (LLM) resolution: %s", llm_result.document_type.value)
+                result = llm_result
         except Exception:
-            logger.exception("Tier 3 (LLM) classification failed for %s — falling back to MANUAL", filename)
+            logger.exception("Tier 3 (LLM) tie-breaker failed")
             if config.DEBUG_MODE:
-                debug["tier_3_llm"] = {"error": "LLM call failed — see server logs"}
+                debug["tier_3_error"] = "LLM failed"
 
-    elif config.DEBUG_MODE:
-        debug["tier_3_llm"] = "skipped (no text to send)"
+    # 5. Final Fallback
+    if not result:
+        logger.info("No classification tier matched: %s → MANUAL", filename)
+        result = ClassificationResult(
+            document_type=DocumentType.UNKNOWN,
+            pipeline=Pipeline.MANUAL,
+            tier="none",
+            confidence=0.0,
+        )
 
-    # No tier matched
-    logger.info("No classification tier matched: %s → MANUAL", filename)
-    return ClassificationResult(
-        document_type=DocumentType.UNKNOWN,
-        pipeline=Pipeline.MANUAL,
-        tier="none",
-        confidence=0.0,
-    ), debug
+    # Populate debug info
+    if config.DEBUG_MODE:
+        debug["tier_1_result"] = t1_result.document_type.value if t1_result else None
+        debug["tier_2_result"] = t2_result.document_type.value if t2_result else None
+        debug["final_result"] = result.document_type.value
+
+    return result, debug
 

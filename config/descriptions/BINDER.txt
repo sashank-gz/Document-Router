@@ -1,0 +1,6 @@
+An Insurance Binder is a temporary insurance contract.
+It provides immediate, short-term coverage until a formal policy is issued.
+Confirms coverage agreement and lists details like:
+- Insured party
+- Coverage limits
+- Effective dates.

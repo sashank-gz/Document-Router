@@ -1,7 +1,19 @@
-# Phrases to look for INSIDE the document text (first page)
-# One phrase per line (case-insensitive)
-
-quote
-quotation
+# Phrases to look for INSIDE the document text
+premium proposal
+estimated cost
+indicative quote
+quote number
+quoted premium
+this is not a binder
+proposal for insurance
+rating summary
 premium indication
-proposed premium
+price quote
+non-binding indication
+terms of proposal
+subjectivity list
+quoted terms
+valid until
+expiry date of quote
+carrier quote
+agent indication

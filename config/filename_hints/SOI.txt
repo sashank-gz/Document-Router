@@ -1,6 +1,9 @@
-# Keywords to look for in the FILE NAME
-# One keyword per line (case-insensitive)
-
+# Filename keywords/fragments (case-insensitive)
 soi
-schedule of insurance
-schedule_of_insurance
+summary
+benefits
+interest
+policy_summary
+soi_doc
+coverage_summary
+overview

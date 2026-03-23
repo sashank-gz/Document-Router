@@ -1,6 +1,8 @@
-# Phrases to look for INSIDE the document text (first page)
-# One phrase per line (case-insensitive)
-
+# Phrases to look for INSIDE the document text
 acord
-accord form
+acord form
 certificate of insurance
+certificate of liability
+evidence of property insurance
+additional insured
+coverage limits

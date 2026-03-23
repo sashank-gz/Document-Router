@@ -18,22 +18,32 @@ import re
 from typing import Optional
 
 from . import config
-from .document_types import DocumentType, Pipeline, SYSTEM_PROMPT_TEXT, get_pipeline, get_valid_types
 
 logger = logging.getLogger(__name__)
 
-
 # ── Load LLM settings ───────────────────────────────────────────────
+from .document_types import (
+    SYSTEM_PROMPT_TEXT, TYPE_DESCRIPTIONS, DocumentType, get_pipeline,
+    get_valid_types,
+)
 
 _VALID_TYPES = get_valid_types()
 _MAX_TEXT_CHARS = int(config.LLM_MAX_TEXT_CHARS)
 _TEMPERATURE = float(config.LLM_TEMPERATURE)
 _MAX_TOKENS = int(config.LLM_MAX_TOKENS)
 
-# Build the full system prompt: user-editable part + auto-generated type list
+# Build descriptive list for the prompt
+_TYPE_DETAILS = []
+for t in _VALID_TYPES:
+    desc = TYPE_DESCRIPTIONS.get(t, "No description available.")
+    _TYPE_DETAILS.append(f"- {t}: {desc}")
+
+# Build the full system prompt: user-editable part + auto-generated metadata
+_type_details_str = "\n".join(_TYPE_DETAILS)
 SYSTEM_PROMPT = (
-    f"{SYSTEM_PROMPT_TEXT}\n"
-    f"Allowed types: {', '.join(_VALID_TYPES)}.\n"
+    f"{SYSTEM_PROMPT_TEXT}\n\n"
+    "Allowed types and descriptions:\n"
+    f"{_type_details_str}\n\n"
     'Format: {"document_type": "<TYPE>", "confidence": <0.0-1.0>}'
 )
 
@@ -95,6 +105,9 @@ def _call_groq(user_prompt: str) -> Optional[str]:
         temperature=_TEMPERATURE,
         max_tokens=_MAX_TOKENS,
     )
+    if not response.choices:
+        logger.error("Groq returned no choices")
+        return None
     return response.choices[0].message.content
 
 
@@ -108,7 +121,11 @@ def _call_gemini(user_prompt: str) -> Optional[str]:
         f"{SYSTEM_PROMPT}\n\n{user_prompt}",
         generation_config={"temperature": _TEMPERATURE, "max_output_tokens": _MAX_TOKENS},
     )
-    return response.text
+    try:
+        return response.text
+    except Exception as exc:
+        logger.warning("Could not extract text from Gemini response: %s", exc)
+        return None
 
 
 # ── Public entry point ───────────────────────────────────────────────

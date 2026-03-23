@@ -100,15 +100,19 @@ for name, pipeline_str in _routes.items():
     ROUTE_MAP[DocumentType[name]] = Pipeline(pipeline_str)
 ROUTE_MAP[DocumentType["UNKNOWN"]] = Pipeline.MANUAL
 
-# Pre-load hints, prompt, and settings
+# Pre-load hints, prompt, settings, and descriptions
 FILENAME_HINTS: dict[str, list[str]] = _load_hints("filename_hints")
 KEYWORD_HINTS: dict[str, list[str]] = _load_hints("keyword_hints")
+TYPE_DESCRIPTIONS: dict[str, str] = {
+    txt_file.stem.upper(): txt_file.read_text(encoding="utf-8").strip()
+    for txt_file in (CONFIG_DIR / "descriptions").glob("*.txt")
+}
 SYSTEM_PROMPT_TEXT: str = _load_prompt()
 SETTINGS: dict[str, str] = _load_settings()
 
 logger.info(
-    "Config loaded: %d document types, %d filename hint files, %d keyword hint files, %d settings",
-    len(_routes), len(FILENAME_HINTS), len(KEYWORD_HINTS), len(SETTINGS)
+    "Config loaded: %d types, %d filename hints, %d keyword hints, %d descriptions, %d settings",
+    len(_routes), len(FILENAME_HINTS), len(KEYWORD_HINTS), len(TYPE_DESCRIPTIONS), len(SETTINGS)
 )
 
 

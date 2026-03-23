@@ -1,0 +1,8 @@
+Reports of past claims.
+Used to assess risk.
+Contains:
+- Claim history
+- Paid amounts
+- Dates of loss
+- Reserve amounts.
+Often spans multiple pages.

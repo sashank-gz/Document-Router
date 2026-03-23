@@ -1,6 +1,14 @@
-# Phrases to look for INSIDE the document text (first page)
-# One phrase per line (case-insensitive)
-
-schedule of insurance
-scheduled items
-insured property
+# Phrases to look for INSIDE the document text
+summary of insurance
+statement of interest
+policy summary
+coverage overview
+summary of benefits
+key policy terms
+coverage at a glance
+summary document
+interest statement
+policy highlights
+insured interest
+interest details
+coverage synopsis

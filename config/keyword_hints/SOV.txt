@@ -1,7 +1,15 @@
-# Phrases to look for INSIDE the document text (first page)
-# One phrase per line (case-insensitive)
-
-schedule of values
-property values
-location values
+# Phrases to look for INSIDE the document text
+statement of values
+property schedule
+location list
+replacement cost
 building value
+contents value
+business interruption
+scheduled values
+asset list
+property address
+COPE data
+square footage
+occupancy
+construction type

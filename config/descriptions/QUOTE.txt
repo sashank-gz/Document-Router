@@ -1,0 +1,5 @@
+A summary of coverage and terms offered by an insurer.
+A proposal of terms, not the actual contract.
+Mainly used for:
+- Price estimation
+- Coverage comparison.

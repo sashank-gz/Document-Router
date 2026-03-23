@@ -1,0 +1,7 @@
+Schedule of Values.
+Details the values of properties/assets covered.
+Usually contains:
+- Property addresses
+- Replacement costs
+- Building values.
+Mainly associated with property insurance.

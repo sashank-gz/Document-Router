@@ -1,0 +1,8 @@
+Standard insurance document.
+Reports policy details/coverage.
+Includes:
+- Policy number
+- Insured details
+- Coverage limits
+- Insurer info
+Common: ACORD 25, ACORD 125.

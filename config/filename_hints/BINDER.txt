@@ -1,4 +1,9 @@
-# Keywords to look for in the FILE NAME
-# One keyword per line (case-insensitive)
-
+# Filename keywords/fragments (case-insensitive)
 binder
+temp
+coverage_note
+confirmation
+short_term
+bound
+evidence_of_coverage
+insurance_binder

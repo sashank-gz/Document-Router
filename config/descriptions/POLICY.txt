@@ -1,0 +1,6 @@
+Legal contract of insurance.
+Lists:
+- Terms and conditions
+- Exclusions
+- Endorsements.
+Formal agreement, typically long.

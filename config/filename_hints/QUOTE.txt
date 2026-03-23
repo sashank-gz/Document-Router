@@ -1,5 +1,11 @@
-# Keywords to look for in the FILE NAME
-# One keyword per line (case-insensitive)
-
+# Filename keywords/fragments (case-insensitive)
 quote
-quotation
+proposal
+estimate
+indicative
+price
+terms_offered
+rating
+indication
+premium_quote
+cost_estimate

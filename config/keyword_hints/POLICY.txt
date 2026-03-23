@@ -1,8 +1,20 @@
-# Phrases to look for INSIDE the document text (first page)
-# One phrase per line (case-insensitive)
-
-policy number
-policy holder
-coverage
-insured
-effective date
+# Phrases to look for INSIDE the document text
+declarations page
+named insured
+policy period
+policy wording
+terms and conditions
+insuring agreement
+policy exclusions
+limit of insurance
+endorsement form
+policy contract
+premium amount
+deductible section
+renewal policy
+new business policy
+cancellation provision
+governing law
+fraud notice
+signature page
+official policy

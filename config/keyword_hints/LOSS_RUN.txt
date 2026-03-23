@@ -1,8 +1,13 @@
-# Phrases to look for INSIDE the document text (first page)
-# One phrase per line (case-insensitive)
-# Example: if page 1 contains "claim number", it matches
-
+# Phrases to look for INSIDE the document text
 claim number
 loss date
 total incurred
 loss run
+loss experience
+claims summary
+valuation date
+paid losses
+outstanding reserves
+reserve amount
+net loss
+valuation as of

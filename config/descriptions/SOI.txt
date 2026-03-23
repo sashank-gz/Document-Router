@@ -1,0 +1,6 @@
+Statement of Interest or Summary of Insurance.
+Provides a summary of key terms and coverage of a policy.
+Used as a quick reference for:
+- Coverage understanding
+- Quick policy summary
+Avoids reading the entire formal policy.

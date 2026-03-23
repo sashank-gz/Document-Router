@@ -1,4 +1,8 @@
-# Keywords to look for in the FILE NAME
-# One keyword per line (case-insensitive)
-
+# Filename keywords/fragments (case-insensitive)
 acord
+coi
+cert
+form25
+certificate
+liability
+insurance_cert

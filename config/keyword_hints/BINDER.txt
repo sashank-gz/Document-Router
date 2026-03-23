@@ -1,6 +1,14 @@
-# Phrases to look for INSIDE the document text (first page)
-# One phrase per line (case-insensitive)
-
-binder
-binding authority
-bound coverage
+# Phrases to look for INSIDE the document text
+insurance binder
+temporary coverage
+binder number
+short term agreement
+evidence of coverage
+pending issuance
+effective period
+binder date
+coverage bound
+subject to terms
+limit of liability
+deductible amount
+premium deposit

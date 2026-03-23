@@ -1,4 +1,11 @@
-# Keywords to look for in the FILE NAME
-# One keyword per line (case-insensitive)
-
+# Filename keywords/fragments (case-insensitive)
 policy
+contract
+dec
+declarations
+agreement
+wording
+forms
+endorsements
+policy_package
+full_policy

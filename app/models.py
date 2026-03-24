@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timezone
@@ -15,6 +15,7 @@ class JobRecord(BaseModel):
     status: str
     created_at: str
     pipeline_url: Optional[str] = None
+    debug_info: Optional[dict] = None
 
 
 class JobStore:
@@ -36,7 +37,8 @@ class JobStore:
                     route TEXT NOT NULL,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    pipeline_url TEXT
+                    pipeline_url TEXT,
+                    debug_info TEXT
                 )
                 """
             )
@@ -47,7 +49,12 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN pipeline_url TEXT")
                 conn.commit()
             except sqlite3.OperationalError:
-                # Column already exists
+                pass
+
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN debug_info TEXT")
+                conn.commit()
+            except sqlite3.OperationalError:
                 pass
 
     def create_job(self, file_name: str, route: str, status: str) -> int:
@@ -65,7 +72,8 @@ class JobStore:
         job_id: int,
         route: Optional[str] = None,
         status: Optional[str] = None,
-        pipeline_url: Optional[str] = None
+        pipeline_url: Optional[str] = None,
+        debug_info: Optional[str] = None
     ) -> None:
         updates = []
         params = []
@@ -82,6 +90,10 @@ class JobStore:
             updates.append("pipeline_url = ?")
             params.append(pipeline_url)
 
+        if debug_info is not None:
+            updates.append("debug_info = ?")
+            params.append(debug_info)
+
         if not updates:
             return
 
@@ -92,16 +104,26 @@ class JobStore:
             conn.execute(query, tuple(params))
             conn.commit()
 
+    def _parse_row(self, row) -> JobRecord:
+        import json
+        d = dict(row)
+        if d.get("debug_info"):
+            try:
+                d["debug_info"] = json.loads(d["debug_info"])
+            except json.JSONDecodeError:
+                d["debug_info"] = {"raw": d["debug_info"]}
+        return JobRecord(**d)
+
     def list_jobs(self) -> list[JobRecord]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT id, file_name, route, status, created_at, pipeline_url FROM jobs ORDER BY id DESC").fetchall()
-        return [JobRecord(**dict(row)) for row in rows]
+            rows = conn.execute("SELECT id, file_name, route, status, created_at, pipeline_url, debug_info FROM jobs ORDER BY id DESC").fetchall()
+        return [self._parse_row(row) for row in rows]
 
     def get_job(self, job_id: int) -> Optional[JobRecord]:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, file_name, route, status, created_at, pipeline_url FROM jobs WHERE id = ?",
+                "SELECT id, file_name, route, status, created_at, pipeline_url, debug_info FROM jobs WHERE id = ?",
                 (job_id,),
             ).fetchone()
 
-        return JobRecord(**dict(row)) if row else None
+        return self._parse_row(row) if row else None

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Three-tier document classifier.
 
 Tier 1: Filename-based keyword matching (instant, free)
@@ -54,8 +54,8 @@ def _classify_by_filename(filename: str) -> Optional[ClassificationResult]:
 
 
 def _classify_by_keywords(text: str) -> Optional[ClassificationResult]:
-    """Tier 2 – match document type by first-page text keywords."""
-    text_lower = (text or "").lower()
+    """Tier 2 – match document type by text keywords. Normalizes whitespace so phrases match across line breaks."""
+    text_lower = " ".join((text or "").lower().split())
     for type_name, hints in KEYWORD_HINTS.items():
         if any(hint in text_lower for hint in hints):
             doc_type = DocumentType[type_name]

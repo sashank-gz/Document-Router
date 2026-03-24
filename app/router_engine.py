@@ -1,4 +1,4 @@
-﻿"""
+"""
 Core routing workflow — orchestrates file save, classification, pipeline
 dispatch, and job status tracking for each uploaded document.
 """
@@ -60,10 +60,12 @@ class DocumentRouterEngine:
                 llm_text=multi_page_text,
             )
 
+            import json
             self.job_store.update_job(
                 job_id,
                 route=classification.pipeline.value,
                 status="CLASSIFIED",
+                debug_info=json.dumps(debug_info) if debug_info else None
             )
 
             logger.info(

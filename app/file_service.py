@@ -1,4 +1,4 @@
-﻿"""
+"""
 File I/O utilities: save uploads, extract PDF text, move processed files.
 """
 
@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-import pdfplumber
+from docling.document_converter import DocumentConverter
 from fastapi import UploadFile
 
 logger = logging.getLogger(__name__)
@@ -33,31 +33,37 @@ async def save_upload_file(upload_file: UploadFile, uploads_dir: Path) -> Path:
     return destination
 
 
+def extract_document_text(source: Path | str) -> str:
+    """
+    Extract text from a document using Docling and return it as markdown.
+    This is a reusable function for document conversion.
+    """
+    try:
+        converter = DocumentConverter()
+        doc = converter.convert(str(source)).document
+        return doc.export_to_markdown()
+    except Exception as exc:
+        source_name = Path(source).name if isinstance(source, (Path, str)) else str(source)
+        logger.exception("Unable to extract text from file: %s", source)
+        raise RuntimeError(f"Failed to read document: {source_name}") from exc
+
+
 def extract_classification_text(file_path: Path) -> str:
-    """Extract text for classification (Tier 2). Uses customizable page count."""
+    """Extract text for classification (Tier 2)."""
+    # Note: Docling converts the entire document to markdown by default.
     from . import config
-    return extract_pages_text(file_path, max_pages=config.KEYWORD_SCAN_MAX_PAGES)
+    return extract_document_text(file_path)
 
 
 def extract_pages_text(file_path: Path, max_pages: int = 3) -> str:
     """
-    Extract text from up to *max_pages* pages of a PDF.
+    Extract text from a document.
 
-    Used by Tier 3 (LLM classification) to give the model more context
-    than a single page provides.
+    Used by Tier 3 (LLM classification) to give the model more context.
+    Note: max_pages is kept for backward compatibility, but Docling 
+    processes the entire document by default.
     """
-    try:
-        with pdfplumber.open(file_path) as pdf:
-            pages_to_read = min(len(pdf.pages), max_pages)
-            texts: list[str] = []
-            for i in range(pages_to_read):
-                page_text = pdf.pages[i].extract_text() or ""
-                if page_text.strip():
-                    texts.append(page_text)
-            return "\n\n".join(texts)
-    except Exception as exc:
-        logger.exception("Unable to extract text from file: %s", file_path)
-        raise RuntimeError(f"Failed to read PDF file: {file_path.name}") from exc
+    return extract_document_text(file_path)
 
 
 def move_to_processed(file_path: Path, processed_dir: Path) -> Path:

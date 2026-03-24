@@ -283,10 +283,26 @@ function renderJobsPage() {
             `;
         }
 
+        let debugHtml = "";
+        if (job.debug_info) {
+            const debugId = `debug-job-${job.id}`;
+            debugHtml = `
+                <div style="margin-top: 4px;">
+                    <button class="debug-toggle" onclick="toggleDebug('${debugId}')" style="font-size: 0.7rem; padding: 2px 4px;">
+                        ▸ Debug info
+                    </button>
+                    <div class="debug-content" id="${debugId}" hidden style="max-width: 300px; max-height: 150px; overflow: auto; white-space: pre-wrap; font-size: 0.7rem;">${escapeHtml(JSON.stringify(job.debug_info, null, 2))}</div>
+                </div>
+            `;
+        }
+
         return `
             <tr>
                 <td>${job.id}</td>
-                <td class="file-cell" title="${escapeHtml(job.file_name)}">${escapeHtml(job.file_name || "—")}</td>
+                <td class="file-cell" title="${escapeHtml(job.file_name)}">
+                    ${escapeHtml(job.file_name || "—")}
+                    ${debugHtml}
+                </td>
                 <td><span class="badge badge-type">${job.route || "—"}</span></td>
                 <td><span class="badge badge-${pipelineClass}">${job.route || "—"}</span></td>
                 <td><span class="badge badge-status ${statusClass}">${job.status || "—"}</span></td>

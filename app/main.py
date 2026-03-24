@@ -1,10 +1,14 @@
-﻿"""
+"""
 FastAPI application – Document Router Platform.
 
 API endpoints for uploading PDFs, checking job status, and health.
 """
 
 from __future__ import annotations
+
+import os
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 
 import logging
 from pathlib import Path

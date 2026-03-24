@@ -1,4 +1,4 @@
-"""
+﻿"""
 File I/O utilities: save uploads, extract PDF text, move processed files.
 """
 
@@ -9,8 +9,11 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from docling.document_converter import DocumentConverter
 from fastapi import UploadFile
+
+from .extractor import AdvancedDoclingExtractor
+
+_extractor = None
 
 logger = logging.getLogger(__name__)
 
@@ -35,33 +38,13 @@ async def save_upload_file(upload_file: UploadFile, uploads_dir: Path) -> Path:
 
 def extract_document_text(source: Path | str) -> str:
     """
-    Extract text from a document using Docling and return it as markdown.
+    Extract text using the Advanced Hardened Docling pipeline.
     This is a reusable function for document conversion.
     """
-    try:
-        converter = DocumentConverter()
-        doc = converter.convert(str(source)).document
-        
-        from . import config
-        base_path = Path(source)
-        
-        md_text = doc.export_to_markdown()
-        
-        if config.DOCLING_SAVE_MD:
-            (base_path.parent / f"{base_path.stem}.md").write_text(md_text, encoding="utf-8")
-            
-        if config.DOCLING_SAVE_JSON:
-            import json
-            (base_path.parent / f"{base_path.stem}.json").write_text(json.dumps(doc.export_to_dict()), encoding="utf-8")
-            
-        if config.DOCLING_SAVE_HTML:
-            (base_path.parent / f"{base_path.stem}.html").write_text(doc.export_to_html(), encoding="utf-8")
-            
-        return md_text
-    except Exception as exc:
-        source_name = Path(source).name if isinstance(source, (Path, str)) else str(source)
-        logger.exception("Unable to extract text from file: %s", source)
-        raise RuntimeError(f"Failed to read document: {source_name}") from exc
+    global _extractor
+    if _extractor is None:
+        _extractor = AdvancedDoclingExtractor()
+    return _extractor.extract(source)
 
 
 def extract_classification_text(file_path: Path) -> str:

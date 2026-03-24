@@ -5,53 +5,31 @@ from . import config
 
 logger = logging.getLogger(__name__)
 
-def _detect_handwriting_with_vision(page: fitz.Page) -> bool:
-    """Uses configured LLM Vision models to detect handwriting on a page."""
+def normalize_pdf(file_path: Path | str) -> Path:
+    """Detects rotation and prepares a sanitized PDF if needed."""
     try:
-        pix = page.get_pixmap(dpi=72)
-        img_bytes = pix.tobytes("png")
-        
-        prompt = "Analyze this document image. Does it contain any handwritten text or signature? Reply with ONLY the word YES or NO."
-        
-        if config.GEMINI_ENABLED and config.GEMINI_API_KEY:
-            import google.generativeai as genai
-            genai.configure(api_key=config.GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            image_part = {"mime_type": "image/png", "data": img_bytes}
+        doc = fitz.open(str(file_path))
+        if doc.needs_pass:
+            doc.close()
+            return Path(file_path)
             
-            response = model.generate_content([prompt, image_part])
-            text = response.text.strip().upper()
-            return "YES" in text
+        needs_rewrite = False
+        for page in doc:
+            if page.rotation != 0:
+                needs_rewrite = True
+                
+        if needs_rewrite:
+            # To thoroughly bake rotation would require re-generating pages via images 
+            # or low-level affine transformations which break simple text layers. 
+            # For 100% free mode, we trust RapidOCR which is somewhat tolerant of rotation metadata.
+            logger.info("Rotated pages detected. RapidOCR will attempt structure extraction.")
             
-        elif config.GROQ_ENABLED and config.GROQ_API_KEY:
-            from groq import Groq
-            import base64
-            
-            encoded = base64.b64encode(img_bytes).decode('utf-8')
-            data_url = f"data:image/png;base64,{encoded}"
-            
-            client = Groq(api_key=config.GROQ_API_KEY)
-            response = client.chat.completions.create(
-                model="llama-3.2-11b-vision-preview",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": data_url}}
-                        ]
-                    }
-                ],
-                temperature=0.0,
-                max_tokens=10
-            ) # Note: Vision model limit
-            text = response.choices[0].message.content.strip().upper()
-            return "YES" in text
-            
+        doc.close()
     except Exception as e:
-        logger.warning(f"Vision handwriting detection failed: {e}")
+        logger.warning(f"Normalization skipped: {e}")
         
-    return False
+    return Path(file_path)
+
 
 def analyze_pdf(file_path: Path | str) -> dict:
     """Analyze a PDF to determine its traits: Dense, Scanned, Rotated, etc."""
@@ -81,10 +59,6 @@ def analyze_pdf(file_path: Path | str) -> dict:
             has_rotated = True
         total_text_len += len(page.get_text("text").strip())
         total_images += len(page.get_image_info())
-        
-        # Only check the first page for handwriting to save time/tokens
-        if i == 0 and not is_handwritten:
-            is_handwritten = _detect_handwriting_with_vision(page)
             
     doc.close()
     

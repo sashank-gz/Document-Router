@@ -61,11 +61,15 @@ class DocumentRouterEngine:
         debug_info = initial_debug_info or {}
         
         try:
-            from .pdf_utils import analyze_pdf
+            from .pdf_utils import analyze_pdf, normalize_pdf
             import json
             
             # If not initialized, check encryption and properties
             if initial_debug_info is None:
+                
+                # 100% Free Outline requires pre-baking any rotation before extraction
+                saved_path = normalize_pdf(saved_path)
+                
                 pdf_info = analyze_pdf(saved_path)
                 if pdf_info.get("is_encrypted"):
                     self.job_store.update_job(

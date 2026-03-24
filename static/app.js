@@ -183,6 +183,16 @@ function displayResults(results) {
             `;
         }
 
+        let exportsHtml = "";
+        if (r.available_outputs && r.available_outputs.length > 0) {
+            const stem = r.file_name.replace(/\.[^/.]+$/, "");
+            exportsHtml = `<div style="margin-top:6px; display:flex; gap:4px; font-size:0.75rem;">`;
+            r.available_outputs.forEach(ext => {
+                exportsHtml += `<a href="/processed/${stem}.${ext.toLowerCase()}" target="_blank" class="badge" style="text-decoration:none; background:var(--bg-card); border:1px solid var(--border-color); color:var(--text-color); cursor:pointer;">↓ Docling ${ext}</a>`;
+            });
+            exportsHtml += `</div>`;
+        }
+
         card.innerHTML = `
             <div class="result-info">
                 <div class="result-filename">${escapeHtml(r.file_name || "Unknown")}</div>
@@ -198,6 +208,7 @@ function displayResults(results) {
                     </div>
                 </div>
                 ${debugHtml}
+                ${exportsHtml}
                 ${r.message ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(r.message)}</div>` : ""}
             </div>
             <div class="result-badges">
@@ -283,6 +294,16 @@ function renderJobsPage() {
             `;
         }
 
+        let exportsHtml = "";
+        if (job.available_outputs && job.available_outputs.length > 0) {
+            const stem = job.file_name.replace(/\.[^/.]+$/, "");
+            exportsHtml = `<div style="margin-top:4px; display:flex; gap:4px; font-size:0.7rem;">`;
+            job.available_outputs.forEach(ext => {
+                exportsHtml += `<a href="/processed/${stem}.${ext.toLowerCase()}" target="_blank" style="text-decoration:none; padding:2px 6px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:var(--text-color);">↓ ${ext}</a>`;
+            });
+            exportsHtml += `</div>`;
+        }
+
         let debugHtml = "";
         if (job.debug_info) {
             const debugId = `debug-job-${job.id}`;
@@ -301,6 +322,7 @@ function renderJobsPage() {
                 <td>${job.id}</td>
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
                     ${escapeHtml(job.file_name || "—")}
+                    ${exportsHtml}
                     ${debugHtml}
                 </td>
                 <td><span class="badge badge-type">${job.route || "—"}</span></td>

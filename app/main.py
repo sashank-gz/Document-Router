@@ -50,6 +50,9 @@ app.add_middleware(
 # Serve static assets (CSS, JS)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Serve processed output files downloading
+app.mount("/processed", StaticFiles(directory=str(PROCESSED_DIR)), name="processed")
+
 job_store = JobStore(DB_PATH)
 router_engine = DocumentRouterEngine(
     job_store=job_store,
@@ -96,17 +99,26 @@ async def upload_documents(files: list[UploadFile] = File(...)) -> dict:
 
 
 def _enrich_job(job: JobRecord) -> JobRecord:
-    """Add pipeline_url to a JobRecord based on its route and status."""
+    """Add pipeline_url and available_outputs to a JobRecord."""
     if job.status == "COMPLETED" and not job.pipeline_url:
         if job.route == Pipeline.OCR.value:
             url = config.OCR_UI_URL
-            # Note: Falling back to job.file_name is risky for OCR due to timestamping
             sep = "&" if "?" in url else "?"
             job.pipeline_url = f"{url}{sep}file={job.file_name}"
         elif job.route == Pipeline.LLM.value:
             url = config.LLM_UI_URL
             sep = "&" if "?" in url else "?"
             job.pipeline_url = f"{url}{sep}file={job.file_name}"
+            
+    # Check for available Docling exports
+    if job.file_name:
+        stem = Path(job.file_name).stem
+        outputs = []
+        for ext in [".md", ".json", ".html"]:
+            if (PROCESSED_DIR / f"{stem}{ext}").exists():
+                outputs.append(ext[1:].upper())
+        job.available_outputs = outputs
+        
     return job
 
 

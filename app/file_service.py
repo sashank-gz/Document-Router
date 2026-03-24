@@ -41,7 +41,23 @@ def extract_document_text(source: Path | str) -> str:
     try:
         converter = DocumentConverter()
         doc = converter.convert(str(source)).document
-        return doc.export_to_markdown()
+        
+        from . import config
+        base_path = Path(source)
+        
+        md_text = doc.export_to_markdown()
+        
+        if config.DOCLING_SAVE_MD:
+            (base_path.parent / f"{base_path.stem}.md").write_text(md_text, encoding="utf-8")
+            
+        if config.DOCLING_SAVE_JSON:
+            import json
+            (base_path.parent / f"{base_path.stem}.json").write_text(json.dumps(doc.export_to_dict()), encoding="utf-8")
+            
+        if config.DOCLING_SAVE_HTML:
+            (base_path.parent / f"{base_path.stem}.html").write_text(doc.export_to_html(), encoding="utf-8")
+            
+        return md_text
     except Exception as exc:
         source_name = Path(source).name if isinstance(source, (Path, str)) else str(source)
         logger.exception("Unable to extract text from file: %s", source)
@@ -71,4 +87,11 @@ def move_to_processed(file_path: Path, processed_dir: Path) -> Path:
     processed_dir.mkdir(parents=True, exist_ok=True)
     destination = processed_dir / file_path.name
     shutil.move(str(file_path), str(destination))
+    
+    # Move any exported docling auxiliary files
+    for ext in [".md", ".json", ".html"]:
+        aux_file = file_path.parent / f"{file_path.stem}{ext}"
+        if aux_file.exists():
+            shutil.move(str(aux_file), str(processed_dir / f"{file_path.stem}{ext}"))
+            
     return destination

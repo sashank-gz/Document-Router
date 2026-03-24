@@ -69,6 +69,13 @@ LLM_ENDPOINT: str = os.getenv("LLM_ENDPOINT", "http://llm-service/process")
 OCR_UI_URL: str = os.getenv("OCR_UI_URL", "http://localhost:3001")
 LLM_UI_URL: str = os.getenv("LLM_UI_URL", "http://localhost:8080")
 
+def _parse_bool(val: str) -> bool:
+    return val.strip().lower() in ("true", "1", "yes")
+
 # Custom timeout (Customizable in settings.txt)
 PIPELINE_TIMEOUT: int = int(_get_setting("PIPELINE_TIMEOUT", "30"))
 
+# ── Extraction Storage Formats ──────────────────────────────────────
+DOCLING_SAVE_MD: bool = _env_bool("DOCLING_SAVE_MD", _parse_bool(_get_setting("DOCLING_SAVE_MD", "true")))
+DOCLING_SAVE_JSON: bool = _env_bool("DOCLING_SAVE_JSON", _parse_bool(_get_setting("DOCLING_SAVE_JSON", "false")))
+DOCLING_SAVE_HTML: bool = _env_bool("DOCLING_SAVE_HTML", _parse_bool(_get_setting("DOCLING_SAVE_HTML", "false")))

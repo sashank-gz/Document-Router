@@ -16,6 +16,7 @@ class JobRecord(BaseModel):
     created_at: str
     pipeline_url: Optional[str] = None
     debug_info: Optional[dict] = None
+    available_outputs: list[str] = []
 
 
 class JobStore:

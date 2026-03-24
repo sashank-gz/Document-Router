@@ -174,6 +174,15 @@ class DocumentRouterEngine:
             "confidence": classification.confidence,
             "status": "COMPLETED",
         }
+        
+        # Add available outputs links
+        stem = path.stem
+        outputs = []
+        for ext in [".md", ".json", ".html"]:
+            if (path.parent / f"{stem}{ext}").exists():
+                outputs.append(ext[1:].upper())
+        result["available_outputs"] = outputs
+
         # Include the service URL so the frontend can link to it
         if classification.pipeline == Pipeline.OCR:
             url = config.OCR_UI_URL

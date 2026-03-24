@@ -169,7 +169,17 @@ function displayResults(results) {
         }
 
         let openBtnHtml = "";
-        if (r.pipeline_url) {
+        if (r.status === "REQUIRES_PASSWORD") {
+            openBtnHtml = `
+                <button class="btn btn-open" style="background: var(--error-bg); color: var(--error); border: 1px solid var(--error); cursor: pointer;" onclick="openUnlockModal(${r.job_id || 0})">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    Unlock
+                </button>
+            `;
+        } else if (r.pipeline_url) {
             const btnClass = pipelineClass === "ocr" ? "btn-open-ocr" : "btn-open-llm";
             openBtnHtml = `
                 <a href="${r.pipeline_url}" target="_blank" rel="noopener" class="btn btn-open ${btnClass}">
@@ -193,6 +203,11 @@ function displayResults(results) {
             exportsHtml += `</div>`;
         }
 
+        let traitsHtml = "";
+        if (r.pdf_traits && r.pdf_traits.length > 0) {
+            traitsHtml = r.pdf_traits.map(t => `<span class="badge badge-trait">${escapeHtml(t)}</span>`).join("");
+        }
+
         card.innerHTML = `
             <div class="result-info">
                 <div class="result-filename">${escapeHtml(r.file_name || "Unknown")}</div>
@@ -200,6 +215,7 @@ function displayResults(results) {
                     <span class="badge badge-type">${r.document_type || "UNKNOWN"}</span>
                     <span class="badge badge-${pipelineClass}">${r.pipeline || "MANUAL"}</span>
                     <span class="badge badge-tier">Tier: ${r.classification_tier || "—"}</span>
+                    ${traitsHtml}
                     <div class="confidence-meter">
                         <div class="confidence-bar">
                             <div class="confidence-fill ${confLevel}" style="width: ${confidencePercent}%"></div>
@@ -285,7 +301,13 @@ function renderJobsPage() {
         const created = job.created_at ? new Date(job.created_at).toLocaleString() : "—";
 
         let actionHtml = "—";
-        if (job.pipeline_url) {
+        if (job.status === "REQUIRES_PASSWORD") {
+            actionHtml = `
+                <button class="btn btn-open" style="background: var(--error-bg); color: var(--error); border: 1px solid var(--error); cursor: pointer;" onclick="openUnlockModal(${job.id})">
+                    Unlock
+                </button>
+            `;
+        } else if (job.pipeline_url) {
             const btnClass = job.route === "OCR" ? "btn-open-ocr" : "btn-open-llm";
             actionHtml = `
                 <a href="${job.pipeline_url}" target="_blank" rel="noopener" class="btn-open ${btnClass}">
@@ -317,11 +339,18 @@ function renderJobsPage() {
             `;
         }
 
+        let fileTraitsHtml = '';
+        let traitsArray = job.debug_info ? job.debug_info.pdf_traits : null;
+        if (traitsArray && traitsArray.length > 0) {
+            fileTraitsHtml = `<div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">${traitsArray.map(t => `<span class="badge badge-trait" style="font-size:0.65rem; padding:2px 6px;">${escapeHtml(t)}</span>`).join('')}</div>`;
+        }
+
         return `
             <tr>
                 <td>${job.id}</td>
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
                     ${escapeHtml(job.file_name || "—")}
+                    ${fileTraitsHtml}
                     ${exportsHtml}
                     ${debugHtml}
                 </td>
@@ -411,6 +440,60 @@ function escapeHtml(text) {
 checkHealth();
 loadJobs();
 
-// Periodically check health
+// ── Periodically check health ────────────────────────────────
 setInterval(checkHealth, 30000);
 
+// ── Password Modal ────────────────────────────────────────────
+const passwordModal = document.getElementById("password-modal");
+const passwordForm = document.getElementById("password-form");
+const passwordInput = document.getElementById("unlock-password");
+const unlockJobId = document.getElementById("unlock-job-id");
+const cancelUnlockBtn = document.getElementById("cancel-unlock-btn");
+const submitUnlockBtn = document.getElementById("submit-unlock-btn");
+
+function openUnlockModal(jobId) {
+    if (!jobId) return;
+    unlockJobId.value = jobId;
+    passwordInput.value = '';
+    passwordModal.showModal();
+}
+
+cancelUnlockBtn.addEventListener("click", () => {
+    passwordModal.close();
+});
+
+passwordForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const jobId = unlockJobId.value;
+    const password = passwordInput.value;
+    if (!password) return;
+    
+    submitUnlockBtn.disabled = true;
+    submitUnlockBtn.textContent = "Unlocking...";
+    
+    try {
+        const res = await fetch(`${API_BASE}/jobs/${jobId}/unlock`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.detail || "Failed to unlock document");
+        }
+        
+        showToast("Document unlocked properly and is being processed", "success");
+        passwordModal.close();
+        
+        // Refresh the jobs table
+        loadJobs();
+        
+    } catch (err) {
+        showToast(err.message, "error");
+    } finally {
+        submitUnlockBtn.disabled = false;
+        submitUnlockBtn.textContent = "Unlock";
+    }
+});

@@ -807,6 +807,58 @@ body {
     overflow-y: auto;
 }
 
+/* ── Modal & Extensions ────────────────────────────────────── */
+.modal {
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 24px;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-lg);
+    max-width: 400px;
+    width: 90%;
+    margin: auto;
+    color: var(--text-primary);
+}
+.modal::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+}
+.modal-header {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+.modal-body {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+.modal-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+    margin-bottom: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.modal-input:focus {
+    border-color: var(--accent);
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+.badge-trait {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
     .navbar {

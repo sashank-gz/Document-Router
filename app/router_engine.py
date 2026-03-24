@@ -39,10 +39,49 @@ class DocumentRouterEngine:
         job_id = self.job_store.create_job(
             file_name=saved_path.name, route="UNKNOWN", status="UPLOADED",
         )
+        return self._process_file(job_id, saved_path)
 
+    def continue_processing(self, job_id: int) -> dict:
+        """Resume processing of a job (e.g. after password unlock)."""
+        job = self.job_store.get_job(job_id)
+        if not job:
+            raise ValueError("Job not found")
+        saved_path = self.uploads_dir / job.file_name
+        
+        # Merge existing debug_info into a new dict
+        from .pdf_utils import analyze_pdf
+        pdf_info = analyze_pdf(saved_path)
+        debug_info = {"pdf_traits": pdf_info.get("traits", [])}
+        
+        return self._process_file(job_id, saved_path, debug_info)
+
+    def _process_file(self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None) -> dict:
+        """Internal synchronous method to run the classification and pipeline."""
         classification = None
-        debug_info = {}
+        debug_info = initial_debug_info or {}
+        
         try:
+            from .pdf_utils import analyze_pdf
+            import json
+            
+            # If not initialized, check encryption and properties
+            if initial_debug_info is None:
+                pdf_info = analyze_pdf(saved_path)
+                if pdf_info.get("is_encrypted"):
+                    self.job_store.update_job(
+                        job_id,
+                        status="REQUIRES_PASSWORD",
+                        debug_info=json.dumps({"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])})
+                    )
+                    return {
+                        "job_id": job_id,
+                        "file_name": saved_path.name,
+                        "status": "REQUIRES_PASSWORD",
+                        "message": "The file is protected with a password.",
+                        "pdf_traits": pdf_info.get("traits", [])
+                    }
+                debug_info["pdf_traits"] = pdf_info.get("traits", [])
+
             # ── Classify ─────────────────────────────────────────
             # Tier 2 text (multi-page based on config/settings.txt)
             tier_2_text = extract_classification_text(saved_path)
@@ -54,13 +93,15 @@ class DocumentRouterEngine:
                     saved_path, max_pages=config.CLASSIFICATION_MAX_PAGES,
                 )
 
-            classification, debug_info = classify_document(
+            classification, cls_debug_info = classify_document(
                 filename=saved_path.name,
                 keyword_text=tier_2_text,
                 llm_text=multi_page_text,
             )
+            
+            # Merge debug info safely
+            debug_info.update(cls_debug_info)
 
-            import json
             self.job_store.update_job(
                 job_id,
                 route=classification.pipeline.value,
@@ -116,6 +157,7 @@ class DocumentRouterEngine:
                 "file_name": saved_path.name,
                 "status": "FAILED",
                 "error": str(exc),
+                "pdf_traits": debug_info.get("pdf_traits", [])
             }
             # Include classification data if available
             if classification:
@@ -139,6 +181,7 @@ class DocumentRouterEngine:
                 "file_name": saved_path.name,
                 "status": "FAILED",
                 "error": str(exc),
+                "pdf_traits": debug_info.get("pdf_traits", [])
             }
             if classification:
                 result["document_type"] = classification.document_type.value
@@ -204,6 +247,11 @@ class DocumentRouterEngine:
             result["message"] = message
         if pipeline_result:
             result["pipeline_result"] = pipeline_result
-        if debug_info and config.DEBUG_MODE:
-            result["debug"] = debug_info
+            
+        if debug_info:
+            if "pdf_traits" in debug_info:
+                result["pdf_traits"] = debug_info["pdf_traits"]
+            if config.DEBUG_MODE:
+                result["debug"] = debug_info
+                
         return result

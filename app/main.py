@@ -20,6 +20,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from .models import JobRecord, JobStore
 from .router_engine import DocumentRouterEngine
@@ -96,6 +97,49 @@ async def upload_documents(files: list[UploadFile] = File(...)) -> dict:
         results.append(result)
 
     return {"count": len(results), "results": results}
+
+
+class UnlockRequest(BaseModel):
+    password: str
+
+@app.post("/jobs/{job_id}/unlock")
+def unlock_job(job_id: int, req: UnlockRequest) -> dict:
+    """Attempt to unlock a PDF job that requires a password."""
+    import json
+    from .pdf_utils import unlock_pdf
+
+    job = job_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status != "REQUIRES_PASSWORD":
+        raise HTTPException(status_code=400, detail="Job is not awaiting a password")
+
+    debug_info = job.debug_info or {}
+    attempts = debug_info.get("password_attempts", 0)
+
+    if attempts >= 5:
+        raise HTTPException(status_code=400, detail="Maximum password attempts exceeded. Job failed permanently.")
+
+    saved_path = UPLOADS_DIR / job.file_name
+    success = unlock_pdf(saved_path, req.password)
+
+    if success:
+        # Mark as unlocked and process it
+        debug_info["password_unlocked"] = True
+        job_store.update_job(job_id, status="UPLOADED", debug_info=json.dumps(debug_info))
+        return router_engine.continue_processing(job_id)
+
+    # Failed to unlock
+    attempts += 1
+    debug_info["password_attempts"] = attempts
+
+    if attempts >= 5:
+        job_store.update_job(job_id, status="FAILED", debug_info=json.dumps(debug_info))
+        raise HTTPException(status_code=400, detail="Maximum password attempts exceeded. Job failed permanently.")
+
+    job_store.update_job(job_id, debug_info=json.dumps(debug_info))
+    raise HTTPException(status_code=401, detail=f"Incorrect password. {5 - attempts} attempts remaining.")
 
 
 def _enrich_job(job: JobRecord) -> JobRecord:

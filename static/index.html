@@ -155,7 +155,23 @@
     <!-- ── Toast Notifications ────────────────────────────── -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="/static/app.js?v=4"></script>
+    <!-- ── Password Modal ────────────────────────────── -->
+    <dialog id="password-modal" class="modal">
+        <form method="dialog" id="password-form">
+            <div class="modal-header">Unlock Document</div>
+            <div class="modal-body" id="password-modal-msg">
+                This document is protected. Please enter the password to continue processing.
+            </div>
+            <input type="hidden" id="unlock-job-id" value="">
+            <input type="password" id="unlock-password" class="modal-input" placeholder="Enter PDF password..." required autofocus>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" id="cancel-unlock-btn">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="submit-unlock-btn" style="background: var(--error);">Unlock</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="/static/app.js?v=5"></script>
 </body>
 
 </html>

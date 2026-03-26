@@ -463,10 +463,12 @@ function renderJobsPage() {
         const tierColor = tierColors[tierDisplay] || "var(--text-muted)";
 
         return `
-            <tr>
+            <tr tabindex="0" onclick="selectedJobFileName='${escapeHtml(job.file_name)}'; document.querySelectorAll('.jobs-table tbody tr').forEach(r=>r.style.outline=''); this.style.outline='2px solid var(--accent)'" style="cursor:pointer;">
                 <td>${job.id}</td>
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
-                    ${escapeHtml(job.file_name || "—")}
+                    <a href="#" onclick="event.preventDefault(); openPdfPreview('${escapeHtml(job.file_name)}')" style="color:var(--accent); text-decoration:none; font-weight:500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                        ${escapeHtml(getOriginalName(job.file_name))}
+                    </a>
                 </td>
                 <td><div style="display:flex; gap:4px; flex-wrap:wrap;">${traitsHtml}</div></td>
                 <td><span class="badge badge-type">${escapeHtml(docTypeDisplay)}</span></td>
@@ -566,6 +568,51 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+/**
+ * Strip the 32-char UUID hex prefix from saved filenames.
+ * e.g. "dd9f61c5f88341a18ae9447ad5613abc_MyReport.pdf" → "MyReport.pdf"
+ */
+function getOriginalName(fileName) {
+    if (!fileName) return "—";
+    // UUID hex is always 32 chars, followed by underscore
+    const match = fileName.match(/^[0-9a-f]{32}_(.+)$/i);
+    return match ? match[1] : fileName;
+}
+
+// ── PDF Preview Modal ─────────────────────────────────────────
+let currentPreviewFileName = null;
+
+function openPdfPreview(storedFileName) {
+    const modal = document.getElementById("pdf-preview-modal");
+    const iframe = document.getElementById("pdf-preview-iframe");
+    const title = document.getElementById("pdf-preview-title");
+    if (!modal || !iframe) return;
+    iframe.src = `/processed/${encodeURIComponent(storedFileName)}`;
+    title.textContent = getOriginalName(storedFileName);
+    currentPreviewFileName = storedFileName;
+    modal.showModal();
+}
+
+function closePdfPreview() {
+    const modal = document.getElementById("pdf-preview-modal");
+    const iframe = document.getElementById("pdf-preview-iframe");
+    if (modal) modal.close();
+    if (iframe) iframe.src = "";
+    currentPreviewFileName = null;
+}
+
+// Spacebar to preview focused/selected row
+let selectedJobFileName = null;
+document.addEventListener("keydown", (e) => {
+    if (e.key === " " && selectedJobFileName && !document.querySelector("dialog[open]")) {
+        e.preventDefault();
+        openPdfPreview(selectedJobFileName);
+    }
+    if (e.key === "Escape" && currentPreviewFileName) {
+        closePdfPreview();
+    }
+});
 
 // ── Init ──────────────────────────────────────────────────────
 checkHealth();

@@ -53,7 +53,7 @@
     --radius-xl: 20px;
 
     /* Spacing */
-    --container-max: 960px;
+    --container-max: 1280px;
 
     /* Transitions */
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -541,13 +541,14 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-xs);
-    overflow: hidden;
+    overflow-x: auto;
 }
 
 .jobs-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
+    min-width: 900px;
 }
 
 .jobs-table thead {
@@ -555,18 +556,19 @@ body {
 }
 
 .jobs-table th {
-    padding: 10px 16px;
+    padding: 9px 12px;
     text-align: left;
     font-weight: 600;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
+    white-space: nowrap;
 }
 
 .jobs-table td {
-    padding: 11px 16px;
+    padding: 10px 12px;
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-light);
 }
@@ -586,7 +588,7 @@ body {
 .jobs-table .file-cell {
     font-weight: 500;
     color: var(--text-primary);
-    max-width: 250px;
+    max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

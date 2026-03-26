@@ -15,6 +15,8 @@ class JobRecord(BaseModel):
     status: str
     created_at: str
     pipeline_url: Optional[str] = None
+    document_type: Optional[str] = None
+    classification_tier: Optional[str] = None
     debug_info: Optional[dict] = None
     available_outputs: list[str] = []
 
@@ -39,6 +41,8 @@ class JobStore:
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     pipeline_url TEXT,
+                    document_type TEXT,
+                    classification_tier TEXT,
                     debug_info TEXT
                 )
                 """
@@ -58,12 +62,24 @@ class JobStore:
             except sqlite3.OperationalError:
                 pass
 
-    def create_job(self, file_name: str, route: str, status: str, debug_info: Optional[str] = None) -> int:
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN document_type TEXT")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN classification_tier TEXT")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+
+    def create_job(self, file_name: str, route: str, status: str, debug_info: Optional[str] = None, document_type: Optional[str] = None, classification_tier: Optional[str] = None) -> int:
         created_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO jobs (file_name, route, status, created_at, debug_info) VALUES (?, ?, ?, ?, ?)",
-                (file_name, route, status, created_at, debug_info),
+                "INSERT INTO jobs (file_name, route, status, created_at, debug_info, document_type, classification_tier) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (file_name, route, status, created_at, debug_info, document_type, classification_tier),
             )
             conn.commit()
             return int(cursor.lastrowid)
@@ -74,7 +90,9 @@ class JobStore:
         route: Optional[str] = None,
         status: Optional[str] = None,
         pipeline_url: Optional[str] = None,
-        debug_info: Optional[str] = None
+        debug_info: Optional[str] = None,
+        document_type: Optional[str] = None,
+        classification_tier: Optional[str] = None,
     ) -> None:
         updates = []
         params = []
@@ -94,6 +112,14 @@ class JobStore:
         if debug_info is not None:
             updates.append("debug_info = ?")
             params.append(debug_info)
+
+        if document_type is not None:
+            updates.append("document_type = ?")
+            params.append(document_type)
+
+        if classification_tier is not None:
+            updates.append("classification_tier = ?")
+            params.append(classification_tier)
 
         if not updates:
             return
@@ -117,13 +143,13 @@ class JobStore:
 
     def list_jobs(self) -> list[JobRecord]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT id, file_name, route, status, created_at, pipeline_url, debug_info FROM jobs ORDER BY id DESC").fetchall()
+            rows = conn.execute("SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, debug_info FROM jobs ORDER BY id DESC").fetchall()
         return [self._parse_row(row) for row in rows]
 
     def get_job(self, job_id: int) -> Optional[JobRecord]:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, file_name, route, status, created_at, pipeline_url, debug_info FROM jobs WHERE id = ?",
+                "SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, debug_info FROM jobs WHERE id = ?",
                 (job_id,),
             ).fetchone()
 

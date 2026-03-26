@@ -117,6 +117,8 @@ class DocumentRouterEngine:
                 job_id,
                 route=classification.pipeline.value,
                 status="CLASSIFIED",
+                document_type=classification.document_type.value,
+                classification_tier=classification.tier,
                 debug_info=json.dumps(debug_info) if debug_info else None
             )
 

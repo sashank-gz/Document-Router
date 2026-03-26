@@ -377,7 +377,7 @@ function renderJobsPage() {
     if (allJobs.length === 0) {
         jobsTbody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="6">No jobs yet — upload documents to get started</td>
+                <td colspan="9">No jobs yet — upload documents to get started</td>
             </tr>
         `;
         paginationEl.hidden = true;
@@ -444,21 +444,34 @@ function renderJobsPage() {
             `;
         }
 
-        let fileTraitsHtml = '';
+        // ── Traits column ───────────────────────────────────
         let traitsArray = job.debug_info ? job.debug_info.pdf_traits : null;
+        let traitsHtml = '<span style="color:var(--text-muted);">—</span>';
         if (traitsArray && traitsArray.length > 0) {
-            fileTraitsHtml = `<div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">${traitsArray.map(t => `<span class="badge badge-trait" style="font-size:0.65rem; padding:2px 6px;">${escapeHtml(t)}</span>`).join('')}</div>`;
+            traitsHtml = traitsArray.map(t => `<span class="badge badge-trait" style="font-size:0.65rem; padding:2px 6px;">${escapeHtml(t)}</span>`).join('');
         }
+
+        // ── Doc Type column ─────────────────────────────────
+        const docType = job.document_type || (job.debug_info ? job.debug_info.final_result : null) || "—";
+        const docTypeDisplay = docType === "UNKNOWN" ? "—" : docType.replace(/_/g, ' ');
+
+        // ── Tier column ────────────────────────────────────
+        const tierRaw = job.classification_tier || "";
+        const tierLabels = { "filename": "Tier 1", "keyword": "Tier 2", "llm": "Tier 3", "none": "—" };
+        const tierDisplay = tierLabels[tierRaw] || tierRaw || "—";
+        const tierColors = { "Tier 1": "#6366F1", "Tier 2": "#10B981", "Tier 3": "#F59E0B" };
+        const tierColor = tierColors[tierDisplay] || "var(--text-muted)";
 
         return `
             <tr>
                 <td>${job.id}</td>
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
                     ${escapeHtml(job.file_name || "—")}
-                    ${fileTraitsHtml}
                 </td>
-                <td><span class="badge badge-type">${job.route || "—"}</span></td>
+                <td><div style="display:flex; gap:4px; flex-wrap:wrap;">${traitsHtml}</div></td>
+                <td><span class="badge badge-type">${escapeHtml(docTypeDisplay)}</span></td>
                 <td><span class="badge badge-${pipelineClass}">${job.route || "—"}</span></td>
+                <td><span style="font-size:0.75rem; font-weight:600; color:${tierColor};">${tierDisplay}</span></td>
                 <td><span class="badge badge-status ${statusClass}">${job.status || "—"}</span></td>
                 <td>${created}</td>
                 <td class="action-cell">
@@ -472,7 +485,7 @@ function renderJobsPage() {
             </tr>
             ${logsContent || debugContent ? `
             <tr>
-                <td colspan="7" style="padding: 0; border: none; border-bottom: 1px solid var(--border-color);">
+                <td colspan="9" style="padding: 0; border: none; border-bottom: 1px solid var(--border-color);">
                     ${logsContent}
                     ${debugContent}
                 </td>

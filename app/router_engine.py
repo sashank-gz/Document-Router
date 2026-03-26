@@ -66,7 +66,6 @@ class DocumentRouterEngine:
             
             # If not initialized, check encryption and properties
             if initial_debug_info is None:
-                
                 # 100% Free Outline requires pre-baking any rotation before extraction
                 saved_path = normalize_pdf(saved_path)
                 
@@ -105,6 +104,14 @@ class DocumentRouterEngine:
             
             # Merge debug info safely
             debug_info.update(cls_debug_info)
+            
+            # Preserve streaming logs from the DB before overwriting
+            try:
+                db_job = self.job_store.get_job(job_id)
+                if db_job and db_job.debug_info and "logs" in db_job.debug_info:
+                    debug_info["logs"] = db_job.debug_info["logs"]
+            except Exception:
+                pass
 
             self.job_store.update_job(
                 job_id,

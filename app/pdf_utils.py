@@ -52,8 +52,6 @@ def analyze_pdf(file_path: Path | str) -> dict:
     total_text_len = 0
     num_pages = len(doc)
     
-    is_handwritten = False
-    
     for i, page in enumerate(doc):
         if page.rotation != 0:
             has_rotated = True
@@ -65,9 +63,14 @@ def analyze_pdf(file_path: Path | str) -> dict:
     traits = []
     
     avg_text = total_text_len / max(1, num_pages)
+    avg_images = total_images / max(1, num_pages)
     
     is_scanned = avg_text < 50 and total_images > 0
     is_dense = avg_text > 2000
+
+    # Handwriting heuristic: pages are image-heavy but contain very little
+    # machine-extractable text — the hallmark of scanned handwritten docs.
+    is_handwritten = avg_images > 2 and avg_text < 100
     
     if has_rotated:
         traits.append("Rotated")

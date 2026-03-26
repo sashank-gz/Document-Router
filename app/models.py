@@ -58,12 +58,12 @@ class JobStore:
             except sqlite3.OperationalError:
                 pass
 
-    def create_job(self, file_name: str, route: str, status: str) -> int:
+    def create_job(self, file_name: str, route: str, status: str, debug_info: Optional[str] = None) -> int:
         created_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO jobs (file_name, route, status, created_at) VALUES (?, ?, ?, ?)",
-                (file_name, route, status, created_at),
+                "INSERT INTO jobs (file_name, route, status, created_at, debug_info) VALUES (?, ?, ?, ?, ?)",
+                (file_name, route, status, created_at, debug_info),
             )
             conn.commit()
             return int(cursor.lastrowid)

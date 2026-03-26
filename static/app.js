@@ -88,6 +88,9 @@ uploadZone.addEventListener("drop", (e) => {
 });
 
 // ── File upload ───────────────────────────────────────────────
+let parsingInterval;
+let timerInterval;
+
 async function handleFiles(fileList) {
     const files = Array.from(fileList).filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
 
@@ -96,52 +99,131 @@ async function handleFiles(fileList) {
         return;
     }
 
-    // Show progress
+    // Show progress & reset terminal
     uploadProgress.hidden = false;
-    progressTitle.textContent = "Processing documents...";
+    const termOut = document.getElementById("terminal-output");
+    termOut.innerHTML = `<div>[system] Commencing batch job...</div>`;
+
+    progressTitle.innerHTML = `Processing documents... <span id="timer-display" style="font-family: monospace; font-weight: bold; margin-left:10px;">00:00.000</span>`;
     progressCount.textContent = `0 / ${files.length}`;
     progressBar.style.width = "0%";
+
+    clearInterval(timerInterval);
+    const startTime = Date.now();
+    timerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const mins = String(Math.floor(elapsed / 60000)).padStart(2, '0');
+        const secs = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0');
+        const millis = String(elapsed % 1000).padStart(3, '0');
+        const d = document.getElementById("timer-display");
+        if (d) d.textContent = `${mins}:${secs}.${millis}`;
+    }, 47);
 
     const formData = new FormData();
     files.forEach(file => formData.append("files", file));
 
     try {
-        // Animate progress smoothly
-        progressBar.style.width = "30%";
+        progressBar.style.width = "5%";
+        termOut.innerHTML += `<div>[request] Sending payload to origin...</div>`;
 
         const res = await fetch(`${API_BASE}/upload`, {
             method: "POST",
             body: formData,
         });
 
-        progressBar.style.width = "80%";
+        progressBar.style.width = "10%";
 
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
+            termOut.innerHTML += `<div style="color:var(--error);">[error] Upload failed</div>`;
             throw new Error(errData.detail || `Upload failed (${res.status})`);
         }
 
         const data = await res.json();
-        progressBar.style.width = "100%";
-        progressCount.textContent = `${data.count} / ${files.length}`;
-        progressTitle.textContent = "Complete!";
+        const trackingIds = data.jobs.map(j => j.job_id);
 
-        showToast(`${data.count} document(s) classified successfully`, "success");
-        displayResults(data.results);
-        loadJobs();
+        let previouslyRenderedLogs = 0;
 
-        // Hide progress after a moment
-        setTimeout(() => {
-            uploadProgress.hidden = true;
-            progressBar.style.width = "0%";
-        }, 2000);
+        clearInterval(parsingInterval);
+        parsingInterval = setInterval(async () => {
+            try {
+                // Table check
+                const jRes = await fetch(`${API_BASE}/jobs`);
+                const allJ = await jRes.json();
+
+                let doneCounter = 0;
+
+                trackingIds.forEach(id => {
+                    const matched = allJ.find(x => x.id === id);
+                    if (matched) {
+                        if (["COMPLETED", "FAILED", "REQUIRES_PASSWORD"].includes(matched.status)) {
+                            doneCounter++;
+                        }
+                    }
+                });
+
+                progressBar.style.width = `${10 + (doneCounter / trackingIds.length) * 90}%`;
+                progressCount.textContent = `${doneCounter} / ${files.length} [ PROCESSING ]`;
+
+                // Fetch terminal logs for the active job
+                // Realistically, for multiple files, we'll fetch the first one or merge them. We'll poll trackingIds[0] for simplicity.
+                let mergedLogs = [];
+                for (let tid of trackingIds) {
+                    try {
+                        let logRes = await fetch(`${API_BASE}/jobs/${tid}/logs`);
+                        let lData = await logRes.json();
+                        mergedLogs = mergedLogs.concat(lData.logs.map(l => `[worker-${tid}] ${l}`));
+                    } catch (e) { }
+                }
+
+                if (mergedLogs.length > previouslyRenderedLogs) {
+                    const newLogs = mergedLogs.slice(previouslyRenderedLogs);
+                    newLogs.forEach(lg => {
+                        termOut.innerHTML += `<div>${escapeHtml(lg)}</div>`;
+                    });
+                    previouslyRenderedLogs = mergedLogs.length;
+                    termOut.scrollTop = termOut.scrollHeight;
+                }
+
+                // Refresh table automatically
+                allJobs = allJ;
+                renderJobsPage();
+
+                if (doneCounter === trackingIds.length) {
+                    clearInterval(parsingInterval);
+                    clearInterval(timerInterval);
+
+                    progressTitle.innerHTML = `Complete!`;
+                    progressCount.textContent = `${doneCounter} / ${files.length}`;
+                    progressBar.style.width = "100%";
+                    showToast(`${doneCounter} document(s) finished processing`, "success");
+
+                    // Stop relying on result cards implicitly if they conflict
+                    if (typeof resultsSection !== "undefined") {
+                        resultsSection.hidden = true;
+                    }
+                    termOut.innerHTML += `<div>[system] Pipeline terminated successfully.</div>`;
+                    termOut.scrollTop = termOut.scrollHeight;
+
+                    setTimeout(() => {
+                        uploadProgress.hidden = true;
+                        progressBar.style.width = "0%";
+                    }, 5000);
+                }
+            } catch (e) {
+                // Ignore network slips during poll
+            }
+        }, 500);
 
     } catch (err) {
+        clearInterval(timerInterval);
         progressBar.style.width = "0%";
         uploadProgress.hidden = true;
         showToast(err.message || "Upload failed", "error");
     }
 }
+
+
 
 // ── Display Results ───────────────────────────────────────────
 function displayResults(results) {
@@ -223,7 +305,8 @@ function displayResults(results) {
                         <span class="confidence-value">${confidencePercent}%</span>
                     </div>
                 </div>
-                ${debugHtml}
+                ${logsHtml}
+                    ${debugHtml}
                 ${exportsHtml}
                 ${r.message ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(r.message)}</div>` : ""}
             </div>
@@ -238,12 +321,18 @@ function displayResults(results) {
     });
 }
 
-function toggleDebug(id) {
+function toggleDebug(id, btnElement, baseText) {
     const el = document.getElementById(id);
     if (el) {
         el.hidden = !el.hidden;
-        const btn = el.previousElementSibling;
-        if (btn) btn.textContent = el.hidden ? "▸ Debug info" : "▾ Debug info";
+        if (btnElement && baseText) {
+            // Handle dynamically generated action toggles
+            btnElement.textContent = el.hidden ? `View ${baseText}` : `Close ${baseText}`;
+        } else {
+            // Keep legacy behavior safely intact
+            const btn = el.previousElementSibling;
+            if (btn) btn.textContent = el.hidden ? "▸ Debug info" : "▾ Debug info";
+        }
     }
 }
 
@@ -319,23 +408,39 @@ function renderJobsPage() {
         let exportsHtml = "";
         if (job.available_outputs && job.available_outputs.length > 0) {
             const stem = job.file_name.replace(/\.[^/.]+$/, "");
-            exportsHtml = `<div style="margin-top:4px; display:flex; gap:4px; font-size:0.7rem;">`;
             job.available_outputs.forEach(ext => {
-                exportsHtml += `<a href="/processed/${stem}.${ext.toLowerCase()}" target="_blank" style="text-decoration:none; padding:2px 6px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:var(--text-color);">↓ ${ext}</a>`;
+                exportsHtml += `<a href="/processed/${stem}.${ext.toLowerCase()}" target="_blank" style="text-decoration:none; padding:4px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:var(--text-color); font-size:0.75rem;">${ext}</a>\n`;
             });
-            exportsHtml += `</div>`;
         }
 
-        let debugHtml = "";
-        if (job.debug_info) {
-            const debugId = `debug-job-${job.id}`;
-            debugHtml = `
-                <div style="margin-top: 4px;">
-                    <button class="debug-toggle" onclick="toggleDebug('${debugId}')" style="font-size: 0.7rem; padding: 2px 4px;">
-                        ▸ Debug info
-                    </button>
-                    <div class="debug-content" id="${debugId}" hidden style="max-width: 300px; max-height: 150px; overflow: auto; white-space: pre-wrap; font-size: 0.7rem;">${escapeHtml(JSON.stringify(job.debug_info, null, 2))}</div>
+        let logsBtn = "", logsContent = "";
+        let logsArray = job.debug_info ? job.debug_info.logs : null;
+        if (logsArray && Array.isArray(logsArray) && logsArray.length > 0) {
+            const logsId = `logs-job-${job.id}`;
+            const formattedLogs = logsArray.map(l => `<div style="margin-bottom: 2px;">${escapeHtml(l)}</div>`).join('');
+            logsBtn = `
+                <button class="debug-toggle" onclick="toggleDebug('${logsId}', this, 'Terminal Logs')" style="font-size: 0.75rem; padding: 4px 8px; background: #1F2937; color: #10B981; border: 1px solid #374151; border-radius: 4px; cursor: pointer;">
+                    View Terminal Logs
+                </button>
+            `;
+            logsContent = `
+                <div class="debug-content" id="${logsId}" hidden style="margin: 8px; background:#111827; color:#10B981; font-family:monospace; padding:10px; border-radius:6px; max-height: 250px; overflow-y: auto; font-size: 0.7rem; border: 1px solid #374151;">
+                    ${formattedLogs}
                 </div>
+            `;
+            delete job.debug_info.logs;
+        }
+
+        let debugBtn = "", debugContent = "";
+        if (job.debug_info && Object.keys(job.debug_info).length > 0) {
+            const debugId = `debug-job-${job.id}`;
+            debugBtn = `
+                <button class="debug-toggle" onclick="toggleDebug('${debugId}', this, 'JSON Data')" style="font-size: 0.75rem; padding: 4px 8px; background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">
+                    View JSON Data
+                </button>
+            `;
+            debugContent = `
+                <div class="debug-content" id="${debugId}" hidden style="margin: 8px; max-height: 200px; overflow: auto; white-space: pre-wrap; font-size: 0.7rem; background: var(--table-header-bg); padding: 8px; border-radius: 4px;">${escapeHtml(JSON.stringify(job.debug_info, null, 2))}</div>
             `;
         }
 
@@ -351,15 +456,28 @@ function renderJobsPage() {
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
                     ${escapeHtml(job.file_name || "—")}
                     ${fileTraitsHtml}
-                    ${exportsHtml}
-                    ${debugHtml}
                 </td>
                 <td><span class="badge badge-type">${job.route || "—"}</span></td>
                 <td><span class="badge badge-${pipelineClass}">${job.route || "—"}</span></td>
                 <td><span class="badge badge-status ${statusClass}">${job.status || "—"}</span></td>
                 <td>${created}</td>
-                <td class="action-cell">${actionHtml}</td>
+                <td class="action-cell">
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        ${actionHtml}
+                        ${exportsHtml}
+                        ${logsBtn}
+                        ${debugBtn}
+                    </div>
+                </td>
             </tr>
+            ${logsContent || debugContent ? `
+            <tr>
+                <td colspan="7" style="padding: 0; border: none; border-bottom: 1px solid var(--border-color);">
+                    ${logsContent}
+                    ${debugContent}
+                </td>
+            </tr>
+            ` : ''}
         `;
     }).join("");
 
@@ -467,29 +585,29 @@ passwordForm.addEventListener("submit", async (e) => {
     const jobId = unlockJobId.value;
     const password = passwordInput.value;
     if (!password) return;
-    
+
     submitUnlockBtn.disabled = true;
     submitUnlockBtn.textContent = "Unlocking...";
-    
+
     try {
         const res = await fetch(`${API_BASE}/jobs/${jobId}/unlock`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ password })
         });
-        
+
         const data = await res.json();
-        
+
         if (!res.ok) {
             throw new Error(data.detail || "Failed to unlock document");
         }
-        
+
         showToast("Document unlocked properly and is being processed", "success");
         passwordModal.close();
-        
+
         // Refresh the jobs table
         loadJobs();
-        
+
     } catch (err) {
         showToast(err.message, "error");
     } finally {

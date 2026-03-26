@@ -24,6 +24,63 @@ from pydantic import BaseModel
 
 from .models import JobRecord, JobStore
 from .router_engine import DocumentRouterEngine
+from contextvars import ContextVar
+import json
+
+active_job_context = ContextVar("active_job", default=None)
+
+class JobStatusLogHandler(logging.Handler):
+    def __init__(self, job_store):
+        super().__init__()
+        self.job_store = job_store
+
+    def emit(self, record):
+        job_id = active_job_context.get()
+        if not job_id:
+            return
+        
+        if record.levelno < logging.INFO:
+            return
+            
+        name = record.name.lower()
+        if not ("docling" in name or "rapidocr" in name or "document-router" in name):
+            return
+            
+        msg = record.getMessage().strip()
+        
+        msg_lower = msg.lower()
+        if "get /" in msg_lower or "post /" in msg_lower or "http/1.1" in msg_lower:
+            return
+
+        if "C:\\" in msg or "D:\\" in msg or "Downloading" in msg:
+            if "File exists and is valid" in msg:
+                model_name = msg.split("\\")[-1]
+                msg = f"Verified model: {model_name}"
+            elif "Using" in msg and ".onnx" in msg:
+                model_name = msg.split("\\")[-1]
+                msg = f"Loaded model: {model_name}"
+            else:
+                return
+
+        if len(msg) > 90:
+            msg = msg[:87] + "..."
+            
+        if msg in ("COMPLETED", "FAILED", "REQUIRES_PASSWORD"):
+            return
+            
+        job = self.job_store.get_job(job_id)
+        if not job:
+            return
+            
+        debug_info = job.debug_info or {}
+        logs = debug_info.get("logs", [])
+        logs.append(msg)
+        debug_info["logs"] = logs
+        
+        try:
+            self.job_store.update_job(job_id, debug_info=json.dumps(debug_info))
+        except Exception:
+            pass
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOADS_DIR = BASE_DIR / "uploads"
@@ -61,6 +118,10 @@ router_engine = DocumentRouterEngine(
     processed_dir=PROCESSED_DIR,
 )
 
+# Pipe terminal logs back to the database for active jobs
+ui_handler = JobStatusLogHandler(job_store)
+logging.getLogger().addHandler(ui_handler)
+
 
 @app.on_event("startup")
 def startup_event() -> None:
@@ -85,18 +146,40 @@ def startup_event() -> None:
     logger.info("Document Router Platform v2.0 started")
 
 
+from fastapi import BackgroundTasks
+
 @app.post("/upload")
-async def upload_documents(files: list[UploadFile] = File(...)) -> dict:
-    """Upload and process a batch of PDF files."""
+async def upload_documents(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...)
+) -> dict:
+    """Upload and process a batch of PDF files in the background."""
+    from .file_service import save_upload_file
+
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
-    results = []
-    for file in files:
-        result = await router_engine.process_upload(file)
-        results.append(result)
+    def process_job_with_context(job_id: int, saved_path: Path):
+        token = active_job_context.set(job_id)
+        try:
+            router_engine._process_file(job_id, saved_path)
+        finally:
+            active_job_context.reset(token)
 
-    return {"count": len(results), "results": results}
+    jobs = []
+    for file in files:
+        saved_path = await save_upload_file(file, UPLOADS_DIR)
+        job_id = job_store.create_job(
+            file_name=saved_path.name, route="UNKNOWN", status="PROCESSING",
+            debug_info=json.dumps({"logs": []})
+        )
+        
+        jobs.append({"job_id": job_id, "file_name": saved_path.name})
+        
+        # Enqueue the heavy lifting for the background pool
+        background_tasks.add_task(process_job_with_context, job_id, saved_path)
+
+    return {"count": len(jobs), "jobs": jobs}
 
 
 class UnlockRequest(BaseModel):
@@ -180,6 +263,14 @@ def get_job(job_id: int) -> JobRecord:
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return _enrich_job(job)
+
+@app.get("/jobs/{job_id}/logs")
+def get_job_logs(job_id: int) -> dict:
+    """Fetch terminal output logs for a job"""
+    job = job_store.get_job(job_id)
+    if job and job.debug_info:
+        return {"logs": job.debug_info.get("logs", [])}
+    return {"logs": []}
 
 
 @app.get("/health")

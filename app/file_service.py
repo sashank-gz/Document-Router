@@ -1,4 +1,4 @@
-﻿"""
+"""
 File I/O utilities: save uploads, extract PDF text, move processed files.
 """
 
@@ -52,6 +52,16 @@ def extract_classification_text(file_path: Path) -> str:
     # Note: Docling converts the entire document to markdown by default.
     from . import config
     return extract_document_text(file_path)
+
+
+def extract_handwritten_text(file_path: Path) -> str:
+    """Extract text from a handwritten/scanned PDF using EasyOCR backend.
+
+    Uses a dedicated pipeline with force_ocr=True to handle
+    handwritten content that may appear as image overlays.
+    """
+    from .extractor import extract_handwriting_from_pdf
+    return extract_handwriting_from_pdf(file_path)
 
 
 def extract_pages_text(file_path: Path, max_pages: int = 3) -> str:

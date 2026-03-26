@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 python-multipart
-docling
+docling[easyocr]
 requests
 pydantic
 pydantic-settings

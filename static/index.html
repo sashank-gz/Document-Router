@@ -76,8 +76,13 @@
                     <span class="progress-title" id="progress-title">Uploading...</span>
                     <span class="progress-count" id="progress-count">0/0</span>
                 </div>
-                <div class="progress-bar-track">
+                <div class="progress-bar-track" style="margin-bottom:12px;">
                     <div class="progress-bar-fill" id="progress-bar"></div>
+                </div>
+                <!-- Terminal Output -->
+                <div id="terminal-output"
+                    style="background:#111827; color:#10B981; font-family:monospace; font-size:0.75rem; padding:12px; border-radius:6px; height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; border:1px solid #374151;">
+                    <div>[system] Awaiting documents...</div>
                 </div>
             </div>
         </section>
@@ -163,15 +168,17 @@
                 This document is protected. Please enter the password to continue processing.
             </div>
             <input type="hidden" id="unlock-job-id" value="">
-            <input type="password" id="unlock-password" class="modal-input" placeholder="Enter PDF password..." required autofocus>
+            <input type="password" id="unlock-password" class="modal-input" placeholder="Enter PDF password..." required
+                autofocus>
             <div class="modal-actions">
                 <button type="button" class="btn btn-ghost" id="cancel-unlock-btn">Cancel</button>
-                <button type="submit" class="btn btn-primary" id="submit-unlock-btn" style="background: var(--error);">Unlock</button>
+                <button type="submit" class="btn btn-primary" id="submit-unlock-btn"
+                    style="background: var(--error);">Unlock</button>
             </div>
         </form>
     </dialog>
 
-    <script src="/static/app.js?v=5"></script>
+    <script src="/static/app.js?v=9"></script>
 </body>
 
 </html>

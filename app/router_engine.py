@@ -57,6 +57,8 @@ class DocumentRouterEngine:
 
     def _process_file(self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None) -> dict:
         """Internal synchronous method to run the classification and pipeline."""
+        import time
+        start_time = time.time()
         classification = None
         debug_info = initial_debug_info or {}
         
@@ -138,7 +140,8 @@ class DocumentRouterEngine:
             if classification.pipeline == Pipeline.MANUAL:
                 self.job_store.update_job(job_id, status="ROUTED")
                 processed_path = move_to_processed(saved_path, self.processed_dir)
-                self.job_store.update_job(job_id, status="COMPLETED")
+                elapsed = round(time.time() - start_time, 1)
+                self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
                 res = self._build_result(
                     job_id, processed_path, classification,
                     message="Routed to manual review queue",
@@ -156,7 +159,8 @@ class DocumentRouterEngine:
                 pipeline_result = send_to_llm_pipeline(saved_path)
 
             processed_path = move_to_processed(saved_path, self.processed_dir)
-            self.job_store.update_job(job_id, status="COMPLETED")
+            elapsed = round(time.time() - start_time, 1)
+            self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
             res = self._build_result(
                 job_id, processed_path, classification,
                 pipeline_result=pipeline_result,
@@ -167,7 +171,8 @@ class DocumentRouterEngine:
 
         except PipelineError as exc:
             logger.exception("Pipeline processing failed: file=%s", saved_path.name)
-            self.job_store.update_job(job_id, status="FAILED")
+            elapsed = round(time.time() - start_time, 1)
+            self.job_store.update_job(job_id, status="FAILED", extraction_time=elapsed)
             result = {
                 "job_id": job_id,
                 "file_name": saved_path.name,

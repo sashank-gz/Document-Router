@@ -379,7 +379,7 @@ function renderJobsPage() {
     if (allJobs.length === 0) {
         jobsTbody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="9">No jobs yet — upload documents to get started</td>
+                <td colspan="10">No jobs yet — upload documents to get started</td>
             </tr>
         `;
         paginationEl.hidden = true;
@@ -479,6 +479,7 @@ function renderJobsPage() {
                 <td><span class="badge badge-${pipelineClass}">${job.route || "—"}</span></td>
                 <td><span style="font-size:0.75rem; font-weight:600; color:${tierColor};">${tierDisplay}</span></td>
                 <td><span class="badge badge-status ${statusClass}">${job.status || "—"}</span></td>
+                <td><span style="font-size:0.75rem; font-weight:500; color:var(--text-secondary);">${job.extraction_time != null ? (job.extraction_time >= 60 ? (job.extraction_time / 60).toFixed(1) + ' min' : job.extraction_time.toFixed(1) + 's') : '—'}</span></td>
                 <td>${created}</td>
                 <td class="action-cell">
                     <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
@@ -491,7 +492,7 @@ function renderJobsPage() {
             </tr>
             ${logsContent || debugContent ? `
             <tr>
-                <td colspan="9" style="padding: 0; border: none; border-bottom: 1px solid var(--border-color);">
+                <td colspan="10" style="padding: 0; border: none; border-bottom: 1px solid var(--border-color);">
                     ${logsContent}
                     ${debugContent}
                 </td>

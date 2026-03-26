@@ -63,7 +63,7 @@ class AdvancedDoclingExtractor:
                 
             if config.DOCLING_SAVE_JSON:
                 import json
-                (base_path.parent / f"{base_path.stem}.json").write_text(json.dumps(doc.export_to_dict()), encoding="utf-8")
+                (base_path.parent / f"{base_path.stem}.json").write_text(json.dumps(doc.export_to_dict(), indent=2), encoding="utf-8")
                 
             if config.DOCLING_SAVE_HTML:
                 (base_path.parent / f"{base_path.stem}.html").write_text(doc.export_to_html(), encoding="utf-8")
@@ -154,7 +154,7 @@ class HandwrittenDoclingExtractor:
             if config.DOCLING_SAVE_JSON:
                 import json
                 (source.parent / f"{source.stem}_handwritten.json").write_text(
-                    json.dumps(doc.export_to_dict()), encoding="utf-8"
+                    json.dumps(doc.export_to_dict(), indent=2), encoding="utf-8"
                 )
             if config.DOCLING_SAVE_HTML:
                 (source.parent / f"{source.stem}_handwritten.html").write_text(

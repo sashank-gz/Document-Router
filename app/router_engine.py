@@ -69,21 +69,24 @@ class DocumentRouterEngine:
                 # 100% Free Outline requires pre-baking any rotation before extraction
                 saved_path = normalize_pdf(saved_path)
                 
-                pdf_info = analyze_pdf(saved_path)
-                if pdf_info.get("is_encrypted"):
-                    self.job_store.update_job(
-                        job_id,
-                        status="REQUIRES_PASSWORD",
-                        debug_info=json.dumps({"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])})
-                    )
-                    return {
-                        "job_id": job_id,
-                        "file_name": saved_path.name,
-                        "status": "REQUIRES_PASSWORD",
-                        "message": "The file is protected with a password.",
-                        "pdf_traits": pdf_info.get("traits", [])
-                    }
-                debug_info["pdf_traits"] = pdf_info.get("traits", [])
+                if config.ENABLE_PDF_TRAITS:
+                    pdf_info = analyze_pdf(saved_path)
+                    if pdf_info.get("is_encrypted"):
+                        self.job_store.update_job(
+                            job_id,
+                            status="REQUIRES_PASSWORD",
+                            debug_info=json.dumps({"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])})
+                        )
+                        return {
+                            "job_id": job_id,
+                            "file_name": saved_path.name,
+                            "status": "REQUIRES_PASSWORD",
+                            "message": "The file is protected with a password.",
+                            "pdf_traits": pdf_info.get("traits", [])
+                        }
+                    debug_info["pdf_traits"] = pdf_info.get("traits", [])
+                else:
+                    debug_info["pdf_traits"] = []
 
             # ── Classify ─────────────────────────────────────────
             # Tier 2 text (multi-page based on config/settings.txt)

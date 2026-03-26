@@ -289,9 +289,27 @@ def view_processed_file(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
 
     content = file_path.read_text(encoding="utf-8", errors="replace")
-    # Escape HTML entities so content renders as plain text
     import html as html_mod
+
+    # For JSON files: re-format with indentation and apply syntax highlighting
+    is_json = filename.lower().endswith(".json")
+    if is_json:
+        try:
+            parsed = json.loads(content)
+            content = json.dumps(parsed, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+    
     escaped = html_mod.escape(content)
+
+    # Apply JSON syntax coloring after HTML-escaping
+    if is_json:
+        import re as re_mod
+        # Color keys (purple), strings (green), numbers (orange), bools/null (blue)
+        escaped = re_mod.sub(r'(&quot;[^&]*?&quot;)\s*:', r'<span style="color:#C084FC">\1</span>:', escaped)
+        escaped = re_mod.sub(r':\s*(&quot;[^&]*?&quot;)', r': <span style="color:#6EE7B7">\1</span>', escaped)
+        escaped = re_mod.sub(r'(?<=: )(-?\d+\.?\d*)', r'<span style="color:#FDBA74">\1</span>', escaped)
+        escaped = re_mod.sub(r'(?<=: )(true|false|null)', r'<span style="color:#93C5FD">\1</span>', escaped)
 
     # Extract original name (strip UUID prefix)
     display_name = filename

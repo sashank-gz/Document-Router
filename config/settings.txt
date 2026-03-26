@@ -29,9 +29,15 @@ CONFIDENCE_KEYWORD = 0.9
 # Seconds to wait for a pipeline response before timing out. Default: 30
 PIPELINE_TIMEOUT = 30
 
+# ── PDF Trait Detection ───────────────────────────────────────────────
+# Whether to analyse PDFs with PyMuPDF for traits (Scanned, Handwritten, etc.)
+# Set to false to skip this step and save processing time. Default: true
+ENABLE_PDF_TRAITS = true
+
 # ── Docling Output Formats ────────────────────────────────────────────
 # Which formats to save after Docling processes a PDF.
 # Set to true/false. New uploads will produce files in enabled formats.
 DOCLING_SAVE_MD   = true
-DOCLING_SAVE_JSON = false
+DOCLING_SAVE_JSON = true
 DOCLING_SAVE_HTML = false
+

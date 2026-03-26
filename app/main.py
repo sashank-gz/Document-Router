@@ -279,6 +279,85 @@ def health_check() -> dict:
     return {"status": "ok", "service": "document-router-platform", "version": "2.0.0"}
 
 
+@app.get("/view/{filename}")
+def view_processed_file(filename: str):
+    """Serve a processed file (MD/JSON/HTML) wrapped in a styled viewer page."""
+    from fastapi.responses import HTMLResponse
+
+    file_path = PROCESSED_DIR / filename
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    content = file_path.read_text(encoding="utf-8", errors="replace")
+    # Escape HTML entities so content renders as plain text
+    import html as html_mod
+    escaped = html_mod.escape(content)
+
+    # Extract original name (strip UUID prefix)
+    display_name = filename
+    import re
+    m = re.match(r'^[0-9a-f]{32}_(.+)$', filename, re.IGNORECASE)
+    if m:
+        display_name = m.group(1)
+
+    viewer_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{html_mod.escape(display_name)}</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            background: #0F1117;
+            color: #E2E8F0;
+            font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }}
+        .toolbar {{
+            position: sticky; top: 0; z-index: 10;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 20px;
+            background: #1A1D28;
+            border-bottom: 1px solid #2D3348;
+        }}
+        .toolbar-title {{
+            font-weight: 600; font-size: 0.9rem; color: #A5B4FC;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }}
+        .toolbar-actions a, .toolbar-actions button {{
+            padding: 6px 14px; border-radius: 6px; font-size: 0.78rem;
+            text-decoration: none; font-weight: 500; cursor: pointer; border: none;
+        }}
+        .btn-back {{
+            background: #2D3348; color: #E2E8F0;
+        }}
+        .btn-back:hover {{ background: #3D4460; }}
+        .btn-download {{
+            background: #4F46E5; color: white; margin-left: 8px;
+        }}
+        .btn-download:hover {{ background: #4338CA; }}
+        .content {{
+            padding: 20px 24px;
+            overflow-x: auto;
+            white-space: pre;
+        }}
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <span class="toolbar-title">{html_mod.escape(display_name)}</span>
+        <div class="toolbar-actions">
+            <a href="javascript:history.back()" class="btn-back">← Back</a>
+            <a href="/processed/{html_mod.escape(filename)}" download class="btn-download">↓ Download</a>
+        </div>
+    </div>
+    <div class="content">{escaped}</div>
+</body>
+</html>"""
+    return HTMLResponse(content=viewer_html)
+
+
 @app.get("/")
 def serve_frontend() -> FileResponse:
     """Serve the frontend UI."""

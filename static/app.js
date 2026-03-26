@@ -280,7 +280,9 @@ function displayResults(results) {
             const stem = r.file_name.replace(/\.[^/.]+$/, "");
             exportsHtml = `<div style="margin-top:6px; display:flex; gap:4px; font-size:0.75rem;">`;
             r.available_outputs.forEach(ext => {
-                exportsHtml += `<a href="/processed/${stem}.${ext.toLowerCase()}" target="_blank" class="badge" style="text-decoration:none; background:var(--bg-card); border:1px solid var(--border-color); color:var(--text-color); cursor:pointer;">↓ Docling ${ext}</a>`;
+                const lower = ext.toLowerCase();
+                const viewUrl = (lower === 'md' || lower === 'json' || lower === 'html') ? `/view/${stem}.${lower}` : `/processed/${stem}.${lower}`;
+                exportsHtml += `<a href="${viewUrl}" target="_blank" class="badge" style="text-decoration:none; background:var(--bg-card); border:1px solid var(--border-color); color:var(--text-color); cursor:pointer;">↓ Docling ${ext}</a>`;
             });
             exportsHtml += `</div>`;
         }
@@ -409,7 +411,9 @@ function renderJobsPage() {
         if (job.available_outputs && job.available_outputs.length > 0) {
             const stem = job.file_name.replace(/\.[^/.]+$/, "");
             job.available_outputs.forEach(ext => {
-                exportsHtml += `<a href="/processed/${stem}.${ext.toLowerCase()}" target="_blank" style="text-decoration:none; padding:4px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:var(--text-color); font-size:0.75rem;">${ext}</a>\n`;
+                const lower = ext.toLowerCase();
+                const viewUrl = (lower === 'md' || lower === 'json' || lower === 'html') ? `/view/${stem}.${lower}` : `/processed/${stem}.${lower}`;
+                exportsHtml += `<a href="${viewUrl}" target="_blank" style="text-decoration:none; padding:4px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:var(--text-color); font-size:0.75rem;">${ext}</a>\n`;
             });
         }
 

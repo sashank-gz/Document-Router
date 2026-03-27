@@ -102,29 +102,38 @@ def classify_document(
     if t2_result:
         t2_result.confidence = config.CONFIDENCE_KEYWORD
 
-    # 3. Conflict Resolution
+    # 3. Decision Logic
     result: Optional[ClassificationResult] = None
+    is_conflict = False
 
     # Case A: Both match
     if t1_result and t2_result:
         if t1_result.document_type == t2_result.document_type:
             logger.info("Tiers 1 & 2 agree: %s", t1_result.document_type.value)
-            result = t2_result  # Higher confidence wins
+            result = t2_result  # Higher confidence/Keyword match wins
         else:
             logger.warning(
                 "CONFLICT: Filename says %s, Keywords say %s. Triggering Tie-breaker (Tier 3).",
                 t1_result.document_type.value,
                 t2_result.document_type.value
             )
+            is_conflict = True
             debug["conflict_detected"] = {
                 "tier_1": t1_result.document_type.value,
                 "tier_2": t2_result.document_type.value,
             }
 
-    # Case B: Only one matches
-    elif t1_result or t2_result:
-        result = t1_result or t2_result
-        logger.info("Single-tier match: %s (Tier: %s)", result.document_type.value, result.tier)
+    # Case B: Only Tier 2 matches
+    elif t2_result:
+        result = t2_result
+        logger.info("Tier 2 match: %s", result.document_type.value)
+
+    # Case C: Only Tier 1 matches (Now ignored as a standalone classifier)
+    elif t1_result:
+        logger.info(
+            "Tier 1 match (%s) but Tier 2 failed. Ignoring T1 and falling back to Tier 3.",
+            t1_result.document_type.value
+        )
 
     # 4. Tier 3 (LLM) - Tie-breaker OR Fallback
     # Triggered if: 

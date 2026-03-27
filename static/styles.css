@@ -53,7 +53,7 @@
     --radius-xl: 20px;
 
     /* Spacing */
-    --container-max: 1280px;
+    --container-max: 1440px;
 
     /* Transitions */
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -453,6 +453,7 @@ body {
 .badge-type {
     background: var(--accent-light);
     color: var(--accent);
+    white-space: nowrap;
 }
 
 .badge-ocr {
@@ -821,21 +822,25 @@ body {
     margin: auto;
     color: var(--text-primary);
 }
+
 .modal::backdrop {
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(2px);
 }
+
 .modal-header {
     font-size: 1.25rem;
     font-weight: 700;
     margin-bottom: 8px;
     color: var(--text-primary);
 }
+
 .modal-body {
     font-size: 0.9rem;
     color: var(--text-secondary);
     margin-bottom: 20px;
 }
+
 .modal-input {
     width: 100%;
     padding: 10px 12px;
@@ -847,14 +852,17 @@ body {
     outline: none;
     transition: border-color 0.2s;
 }
+
 .modal-input:focus {
     border-color: var(--accent);
 }
+
 .modal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
 }
+
 .badge-trait {
     background: var(--bg-hover);
     color: var(--text-primary);

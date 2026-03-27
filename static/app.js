@@ -477,7 +477,7 @@ function renderJobsPage() {
                 <td><div style="display:flex; gap:4px; flex-wrap:wrap;">${traitsHtml}</div></td>
                 <td><span class="badge badge-type">${escapeHtml(docTypeDisplay)}</span></td>
                 <td><span class="badge badge-${pipelineClass}">${job.route || "—"}</span></td>
-                <td><span style="font-size:0.75rem; font-weight:600; color:${tierColor};">${tierDisplay}</span></td>
+                <td><span style="font-size:0.75rem; font-weight:600; color:${tierColor}; white-space:nowrap;">${tierDisplay}</span></td>
                 <td><span class="badge badge-status ${statusClass}">${job.status || "—"}</span></td>
                 <td><span style="font-size:0.75rem; font-weight:500; color:var(--text-secondary);">${job.extraction_time != null ? (job.extraction_time >= 60 ? (job.extraction_time / 60).toFixed(1) + ' min' : job.extraction_time.toFixed(1) + 's') : '—'}</span></td>
                 <td>${created}</td>

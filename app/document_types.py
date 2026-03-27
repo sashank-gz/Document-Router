@@ -112,7 +112,11 @@ SETTINGS: dict[str, str] = _load_settings()
 
 logger.info(
     "Config loaded: %d types, %d filename hints, %d keyword hints, %d descriptions, %d settings",
-    len(_routes), len(FILENAME_HINTS), len(KEYWORD_HINTS), len(TYPE_DESCRIPTIONS), len(SETTINGS)
+    len(_routes),
+    len(FILENAME_HINTS),
+    len(KEYWORD_HINTS),
+    len(TYPE_DESCRIPTIONS),
+    len(SETTINGS),
 )
 
 

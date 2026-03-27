@@ -30,7 +30,9 @@ def _post_file(endpoint: str, file_path: Path) -> dict:
     if response.status_code >= 400:
         logger.error(
             "Pipeline call failed: endpoint=%s status=%s body=%s",
-            endpoint, response.status_code, response.text,
+            endpoint,
+            response.status_code,
+            response.text,
         )
         raise PipelineError(f"Pipeline call failed with status {response.status_code}")
 
@@ -68,4 +70,3 @@ def send_to_llm_pipeline(file_path: Path) -> dict:
     if config.PIPELINE_DRY_RUN:
         return _dry_run_response(config.LLM_ENDPOINT, file_path)
     return _post_file(config.LLM_ENDPOINT, file_path)
-

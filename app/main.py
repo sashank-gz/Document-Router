@@ -6,11 +6,10 @@ API endpoints for uploading PDFs, checking job status, and health.
 
 from __future__ import annotations
 
+import json
 import logging
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Iterable, Optional
-from . import config
-from .document_types import Pipeline
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,12 +17,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import config
+from .document_types import Pipeline
 from .models import JobRecord, JobStore
 from .router_engine import DocumentRouterEngine
-from contextvars import ContextVar
-import json
 
 active_job_context = ContextVar("active_job", default=None)
+
 
 class JobStatusLogHandler(logging.Handler):
     def __init__(self, job_store):
@@ -34,16 +34,16 @@ class JobStatusLogHandler(logging.Handler):
         job_id = active_job_context.get()
         if not job_id:
             return
-        
+
         if record.levelno < logging.INFO:
             return
-            
+
         name = record.name.lower()
         if not ("docling" in name or "rapidocr" in name or "document-router" in name):
             return
-            
+
         msg = record.getMessage().strip()
-        
+
         msg_lower = msg.lower()
         if "get /" in msg_lower or "post /" in msg_lower or "http/1.1" in msg_lower:
             return
@@ -60,23 +60,24 @@ class JobStatusLogHandler(logging.Handler):
 
         if len(msg) > 90:
             msg = msg[:87] + "..."
-            
+
         if msg in ("COMPLETED", "FAILED", "REQUIRES_PASSWORD"):
             return
-            
+
         job = self.job_store.get_job(job_id)
         if not job:
             return
-            
+
         debug_info = job.debug_info or {}
         logs = debug_info.get("logs", [])
         logs.append(msg)
         debug_info["logs"] = logs
-        
+
         try:
             self.job_store.update_job(job_id, debug_info=json.dumps(debug_info))
         except Exception:
             pass
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOADS_DIR = BASE_DIR / "uploads"
@@ -145,10 +146,10 @@ def startup_event() -> None:
 
 from fastapi import BackgroundTasks
 
+
 @app.post("/upload")
 async def upload_documents(
-    background_tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...)
+    background_tasks: BackgroundTasks, files: list[UploadFile] = File(...)
 ) -> dict:
     """Upload and process a batch of PDF files in the background."""
     from .file_service import save_upload_file
@@ -167,12 +168,14 @@ async def upload_documents(
     for file in files:
         saved_path = await save_upload_file(file, UPLOADS_DIR)
         job_id = job_store.create_job(
-            file_name=saved_path.name, route="UNKNOWN", status="PROCESSING",
-            debug_info=json.dumps({"logs": []})
+            file_name=saved_path.name,
+            route="UNKNOWN",
+            status="PROCESSING",
+            debug_info=json.dumps({"logs": []}),
         )
-        
+
         jobs.append({"job_id": job_id, "file_name": saved_path.name})
-        
+
         # Enqueue the heavy lifting for the background pool
         background_tasks.add_task(process_job_with_context, job_id, saved_path)
 
@@ -182,10 +185,12 @@ async def upload_documents(
 class UnlockRequest(BaseModel):
     password: str
 
+
 @app.post("/jobs/{job_id}/unlock")
 def unlock_job(job_id: int, req: UnlockRequest) -> dict:
     """Attempt to unlock a PDF job that requires a password."""
     import json
+
     from .pdf_utils import unlock_pdf
 
     job = job_store.get_job(job_id)
@@ -199,7 +204,9 @@ def unlock_job(job_id: int, req: UnlockRequest) -> dict:
     attempts = debug_info.get("password_attempts", 0)
 
     if attempts >= 5:
-        raise HTTPException(status_code=400, detail="Maximum password attempts exceeded. Job failed permanently.")
+        raise HTTPException(
+            status_code=400, detail="Maximum password attempts exceeded. Job failed permanently."
+        )
 
     saved_path = UPLOADS_DIR / job.file_name
     success = unlock_pdf(saved_path, req.password)
@@ -216,10 +223,14 @@ def unlock_job(job_id: int, req: UnlockRequest) -> dict:
 
     if attempts >= 5:
         job_store.update_job(job_id, status="FAILED", debug_info=json.dumps(debug_info))
-        raise HTTPException(status_code=400, detail="Maximum password attempts exceeded. Job failed permanently.")
+        raise HTTPException(
+            status_code=400, detail="Maximum password attempts exceeded. Job failed permanently."
+        )
 
     job_store.update_job(job_id, debug_info=json.dumps(debug_info))
-    raise HTTPException(status_code=401, detail=f"Incorrect password. {5 - attempts} attempts remaining.")
+    raise HTTPException(
+        status_code=401, detail=f"Incorrect password. {5 - attempts} attempts remaining."
+    )
 
 
 def _enrich_job(job: JobRecord) -> JobRecord:
@@ -233,7 +244,7 @@ def _enrich_job(job: JobRecord) -> JobRecord:
             url = config.LLM_UI_URL
             sep = "&" if "?" in url else "?"
             job.pipeline_url = f"{url}{sep}file={job.file_name}"
-            
+
     # Check for available Docling exports
     if job.file_name:
         stem = Path(job.file_name).stem
@@ -242,7 +253,7 @@ def _enrich_job(job: JobRecord) -> JobRecord:
             if (PROCESSED_DIR / f"{stem}{ext}").exists():
                 outputs.append(ext[1:].upper())
         job.available_outputs = outputs
-        
+
     return job
 
 
@@ -260,6 +271,7 @@ def get_job(job_id: int) -> JobRecord:
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return _enrich_job(job)
+
 
 @app.get("/jobs/{job_id}/logs")
 def get_job_logs(job_id: int) -> dict:
@@ -296,27 +308,38 @@ def view_processed_file(filename: str):
             content = json.dumps(parsed, indent=2, ensure_ascii=False)
         except Exception:
             pass
-    
+
     escaped = html_mod.escape(content)
 
     # Apply JSON syntax coloring after HTML-escaping
     if is_json:
         import re as re_mod
+
         # Color keys (purple), strings (green), numbers (orange), bools/null (blue)
-        escaped = re_mod.sub(r'(&quot;[^&]*?&quot;)\s*:', r'<span style="color:#C084FC">\1</span>:', escaped)
-        escaped = re_mod.sub(r':\s*(&quot;[^&]*?&quot;)', r': <span style="color:#6EE7B7">\1</span>', escaped)
-        escaped = re_mod.sub(r'(?<=: )(-?\d+\.?\d*)', r'<span style="color:#FDBA74">\1</span>', escaped)
-        escaped = re_mod.sub(r'(?<=: )(true|false|null)', r'<span style="color:#93C5FD">\1</span>', escaped)
+        escaped = re_mod.sub(
+            r"(&quot;[^&]*?&quot;)\s*:", r'<span style="color:#C084FC">\1</span>:', escaped
+        )
+        escaped = re_mod.sub(
+            r":\s*(&quot;[^&]*?&quot;)", r': <span style="color:#6EE7B7">\1</span>', escaped
+        )
+        escaped = re_mod.sub(
+            r"(?<=: )(-?\d+\.?\d*)", r'<span style="color:#FDBA74">\1</span>', escaped
+        )
+        escaped = re_mod.sub(
+            r"(?<=: )(true|false|null)", r'<span style="color:#93C5FD">\1</span>', escaped
+        )
 
     # Extract original name (strip UUID prefix)
     display_name = filename
     import re
-    m = re.match(r'^[0-9a-f]{32}_(.+)$', filename, re.IGNORECASE)
+
+    m = re.match(r"^[0-9a-f]{32}_(.+)$", filename, re.IGNORECASE)
     if m:
         display_name = m.group(1)
 
     # Load the viewer HTML template and render with safe substitution
     from string import Template as StringTemplate
+
     tpl_path = TEMPLATES_DIR / "viewer.html"
     tpl = StringTemplate(tpl_path.read_text(encoding="utf-8"))
     viewer_html = tpl.safe_substitute(

@@ -1,13 +1,13 @@
 """Unit tests for document type configuration loading."""
 
 from app.document_types import (
-    DocumentType,
-    Pipeline,
-    ROUTE_MAP,
     FILENAME_HINTS,
     KEYWORD_HINTS,
-    TYPE_DESCRIPTIONS,
+    ROUTE_MAP,
     SETTINGS,
+    TYPE_DESCRIPTIONS,
+    DocumentType,
+    Pipeline,
     get_pipeline,
     get_valid_types,
 )

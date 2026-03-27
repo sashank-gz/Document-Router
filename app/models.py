@@ -9,7 +9,6 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -20,11 +19,11 @@ class JobRecord(BaseModel):
     route: str
     status: str
     created_at: str
-    pipeline_url: Optional[str] = None
-    document_type: Optional[str] = None
-    classification_tier: Optional[str] = None
-    extraction_time: Optional[float] = None
-    debug_info: Optional[dict] = None
+    pipeline_url: str | None = None
+    document_type: str | None = None
+    classification_tier: str | None = None
+    extraction_time: float | None = None
+    debug_info: dict | None = None
     available_outputs: list[str] = []
 
 
@@ -88,12 +87,30 @@ class JobStore:
             except sqlite3.OperationalError:
                 pass
 
-    def create_job(self, file_name: str, route: str, status: str, debug_info: Optional[str] = None, document_type: Optional[str] = None, classification_tier: Optional[str] = None, extraction_time: Optional[float] = None) -> int:
+    def create_job(
+        self,
+        file_name: str,
+        route: str,
+        status: str,
+        debug_info: str | None = None,
+        document_type: str | None = None,
+        classification_tier: str | None = None,
+        extraction_time: float | None = None,
+    ) -> int:
         created_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             cursor = conn.execute(
                 "INSERT INTO jobs (file_name, route, status, created_at, debug_info, document_type, classification_tier, extraction_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (file_name, route, status, created_at, debug_info, document_type, classification_tier, extraction_time),
+                (
+                    file_name,
+                    route,
+                    status,
+                    created_at,
+                    debug_info,
+                    document_type,
+                    classification_tier,
+                    extraction_time,
+                ),
             )
             conn.commit()
             return int(cursor.lastrowid)
@@ -101,13 +118,13 @@ class JobStore:
     def update_job(
         self,
         job_id: int,
-        route: Optional[str] = None,
-        status: Optional[str] = None,
-        pipeline_url: Optional[str] = None,
-        debug_info: Optional[str] = None,
-        document_type: Optional[str] = None,
-        classification_tier: Optional[str] = None,
-        extraction_time: Optional[float] = None,
+        route: str | None = None,
+        status: str | None = None,
+        pipeline_url: str | None = None,
+        debug_info: str | None = None,
+        document_type: str | None = None,
+        classification_tier: str | None = None,
+        extraction_time: float | None = None,
     ) -> None:
         updates = []
         params = []
@@ -152,6 +169,7 @@ class JobStore:
 
     def _parse_row(self, row) -> JobRecord:
         import json
+
         d = dict(row)
         if d.get("debug_info"):
             try:
@@ -162,10 +180,12 @@ class JobStore:
 
     def list_jobs(self) -> list[JobRecord]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, extraction_time, debug_info FROM jobs ORDER BY id DESC").fetchall()
+            rows = conn.execute(
+                "SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, extraction_time, debug_info FROM jobs ORDER BY id DESC"
+            ).fetchall()
         return [self._parse_row(row) for row in rows]
 
-    def get_job(self, job_id: int) -> Optional[JobRecord]:
+    def get_job(self, job_id: int) -> JobRecord | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, extraction_time, debug_info FROM jobs WHERE id = ?",

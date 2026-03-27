@@ -1,7 +1,6 @@
 """Unit tests for the 3-tier document classifier."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from app.classifier import (
     ClassificationResult,
@@ -10,7 +9,6 @@ from app.classifier import (
     classify_document,
 )
 from app.document_types import DocumentType, Pipeline
-
 
 # ── Tier 1: Filename classification ──────────────────────────────────
 
@@ -108,11 +106,15 @@ class TestClassifyDocument:
         loss_run_type = DocumentType["LOSS_RUN"]
         with patch("app.classifier._classify_by_filename") as mock_fn:
             mock_fn.return_value = ClassificationResult(
-                document_type=loss_run_type, pipeline=Pipeline.OCR, tier="filename",
+                document_type=loss_run_type,
+                pipeline=Pipeline.OCR,
+                tier="filename",
             )
             with patch("app.classifier._classify_by_keywords") as mock_kw:
                 mock_kw.return_value = ClassificationResult(
-                    document_type=loss_run_type, pipeline=Pipeline.OCR, tier="keyword",
+                    document_type=loss_run_type,
+                    pipeline=Pipeline.OCR,
+                    tier="keyword",
                 )
                 result, debug = classify_document("loss_run.pdf", "loss run report")
                 assert result.tier == "both"

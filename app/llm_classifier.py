@@ -15,7 +15,10 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .classifier import ClassificationResult
 
 from . import config
 
@@ -23,7 +26,10 @@ logger = logging.getLogger(__name__)
 
 # ── Load LLM settings ───────────────────────────────────────────────
 from .document_types import (
-    SYSTEM_PROMPT_TEXT, TYPE_DESCRIPTIONS, DocumentType, get_pipeline,
+    SYSTEM_PROMPT_TEXT,
+    TYPE_DESCRIPTIONS,
+    DocumentType,
+    get_pipeline,
     get_valid_types,
 )
 
@@ -64,7 +70,7 @@ def _build_user_prompt(text: str) -> str:
 # ── Response parsing ─────────────────────────────────────────────────
 
 
-def _parse_llm_response(raw: str) -> Optional[dict]:
+def _parse_llm_response(raw: str) -> dict | None:
     """
     Extract {"document_type": "...", "confidence": ...} from the LLM response.
 
@@ -91,7 +97,7 @@ def _parse_llm_response(raw: str) -> Optional[dict]:
 # ── Provider calls ───────────────────────────────────────────────────
 
 
-def _call_groq(user_prompt: str) -> Optional[str]:
+def _call_groq(user_prompt: str) -> str | None:
     """Call Groq chat completions API."""
     from groq import Groq
 
@@ -111,7 +117,7 @@ def _call_groq(user_prompt: str) -> Optional[str]:
     return response.choices[0].message.content
 
 
-def _call_gemini(user_prompt: str) -> Optional[str]:
+def _call_gemini(user_prompt: str) -> str | None:
     """Call Google Gemini generateContent API."""
     import google.generativeai as genai
 
@@ -131,7 +137,7 @@ def _call_gemini(user_prompt: str) -> Optional[str]:
 # ── Public entry point ───────────────────────────────────────────────
 
 
-def classify_with_llm(text: str) -> tuple[Optional["ClassificationResult"], dict]:
+def classify_with_llm(text: str) -> tuple[ClassificationResult | None, dict]:
     """
     Classify document text using the configured LLM provider.
 
@@ -140,9 +146,9 @@ def classify_with_llm(text: str) -> tuple[Optional["ClassificationResult"], dict
     from .classifier import ClassificationResult  # avoid circular import
 
     user_prompt = _build_user_prompt(text)
-    raw_response: Optional[str] = None
+    raw_response: str | None = None
     debug: dict = {}
-    provider_used: Optional[str] = None
+    provider_used: str | None = None
 
     # Try Groq first
     if config.GROQ_ENABLED and config.GROQ_API_KEY:
@@ -201,10 +207,12 @@ def classify_with_llm(text: str) -> tuple[Optional["ClassificationResult"], dict
         return None, debug
 
     debug["status"] = "success"
-    return ClassificationResult(
-        document_type=doc_type,
-        pipeline=get_pipeline(doc_type),
-        tier="llm",
-        confidence=confidence,
-    ), debug
-
+    return (
+        ClassificationResult(
+            document_type=doc_type,
+            pipeline=get_pipeline(doc_type),
+            tier="llm",
+            confidence=confidence,
+        ),
+        debug,
+    )

@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from .document_types import (
-    DocumentType, FILENAME_HINTS, KEYWORD_HINTS, Pipeline, get_pipeline,
+    FILENAME_HINTS,
+    KEYWORD_HINTS,
+    DocumentType,
+    Pipeline,
+    get_pipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,7 +39,7 @@ class ClassificationResult:
 # ── Tier 1: Filename hints ───────────────────────────────────────────
 
 
-def _classify_by_filename(filename: str) -> Optional[ClassificationResult]:
+def _classify_by_filename(filename: str) -> ClassificationResult | None:
     """Tier 1 – match document type by filename keywords."""
     name_lower = (filename or "").lower()
     for type_name, hints in FILENAME_HINTS.items():
@@ -53,7 +56,7 @@ def _classify_by_filename(filename: str) -> Optional[ClassificationResult]:
 # ── Tier 2: First-page text keyword hints ────────────────────────────
 
 
-def _classify_by_keywords(text: str) -> Optional[ClassificationResult]:
+def _classify_by_keywords(text: str) -> ClassificationResult | None:
     """Tier 2 – match document type by text keywords. Normalizes whitespace so phrases match across line breaks."""
     text_lower = " ".join((text or "").lower().split())
     for type_name, hints in KEYWORD_HINTS.items():
@@ -73,7 +76,7 @@ def _classify_by_keywords(text: str) -> Optional[ClassificationResult]:
 def classify_document(
     filename: str,
     keyword_text: str,
-    llm_text: Optional[str] = None,
+    llm_text: str | None = None,
 ) -> tuple[ClassificationResult, dict]:
     """
     Run the 3-tier classification pipeline with conflict resolution.
@@ -100,7 +103,7 @@ def classify_document(
         t2_result.confidence = config.CONFIDENCE_KEYWORD
 
     # 3. Decision Logic
-    result: Optional[ClassificationResult] = None
+    result: ClassificationResult | None = None
     is_conflict = False
 
     # Case A: Both match
@@ -113,7 +116,7 @@ def classify_document(
             logger.warning(
                 "CONFLICT: Filename says %s, Keywords say %s. Triggering Tie-breaker (Tier 3).",
                 t1_result.document_type.value,
-                t2_result.document_type.value
+                t2_result.document_type.value,
             )
             is_conflict = True
             debug["conflict_detected"] = {
@@ -130,7 +133,7 @@ def classify_document(
     elif t1_result:
         logger.info(
             "Tier 1 match (%s) but Tier 2 failed. Ignoring T1 and falling back to Tier 3.",
-            t1_result.document_type.value
+            t1_result.document_type.value,
         )
 
     # 4. Tier 3 (LLM) - Tie-breaker OR Fallback
@@ -138,11 +141,12 @@ def classify_document(
     if (not result or is_conflict) and llm_text and llm_text.strip():
         try:
             from .llm_classifier import classify_with_llm
+
             llm_result, llm_debug = classify_with_llm(llm_text)
-            
+
             if config.DEBUG_MODE:
                 debug["tier_3_llm"] = llm_debug
-            
+
             if llm_result:
                 logger.info("Tier 3 (LLM) resolution: %s", llm_result.document_type.value)
                 result = llm_result
@@ -168,4 +172,3 @@ def classify_document(
         debug["final_result"] = result.document_type.value
 
     return result, debug
-

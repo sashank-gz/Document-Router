@@ -37,7 +37,9 @@ class DocumentRouterEngine:
         """Full lifecycle for one uploaded PDF."""
         saved_path = await save_upload_file(upload_file, self.uploads_dir)
         job_id = self.job_store.create_job(
-            file_name=saved_path.name, route="UNKNOWN", status="UPLOADED",
+            file_name=saved_path.name,
+            route="UNKNOWN",
+            status="UPLOADED",
         )
         return self._process_file(job_id, saved_path)
 
@@ -47,44 +49,51 @@ class DocumentRouterEngine:
         if not job:
             raise ValueError("Job not found")
         saved_path = self.uploads_dir / job.file_name
-        
+
         # Merge existing debug_info into a new dict
         from .pdf_utils import analyze_pdf
+
         pdf_info = analyze_pdf(saved_path)
         debug_info = {"pdf_traits": pdf_info.get("traits", [])}
-        
+
         return self._process_file(job_id, saved_path, debug_info)
 
-    def _process_file(self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None) -> dict:
+    def _process_file(
+        self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None
+    ) -> dict:
         """Internal synchronous method to run the classification and pipeline."""
         import time
+
         start_time = time.time()
         classification = None
         debug_info = initial_debug_info or {}
-        
+
         try:
-            from .pdf_utils import analyze_pdf, normalize_pdf
             import json
-            
+
+            from .pdf_utils import analyze_pdf, normalize_pdf
+
             # If not initialized, check encryption and properties
             if initial_debug_info is None:
                 # 100% Free Outline requires pre-baking any rotation before extraction
                 saved_path = normalize_pdf(saved_path)
-                
+
                 if config.ENABLE_PDF_TRAITS:
                     pdf_info = analyze_pdf(saved_path)
                     if pdf_info.get("is_encrypted"):
                         self.job_store.update_job(
                             job_id,
                             status="REQUIRES_PASSWORD",
-                            debug_info=json.dumps({"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])})
+                            debug_info=json.dumps(
+                                {"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])}
+                            ),
                         )
                         return {
                             "job_id": job_id,
                             "file_name": saved_path.name,
                             "status": "REQUIRES_PASSWORD",
                             "message": "The file is protected with a password.",
-                            "pdf_traits": pdf_info.get("traits", [])
+                            "pdf_traits": pdf_info.get("traits", []),
                         }
                     debug_info["pdf_traits"] = pdf_info.get("traits", [])
                 else:
@@ -98,7 +107,8 @@ class DocumentRouterEngine:
             multi_page_text = None
             if config.GROQ_ENABLED or config.GEMINI_ENABLED:
                 multi_page_text = extract_pages_text(
-                    saved_path, max_pages=config.CLASSIFICATION_MAX_PAGES,
+                    saved_path,
+                    max_pages=config.CLASSIFICATION_MAX_PAGES,
                 )
 
             classification, cls_debug_info = classify_document(
@@ -106,10 +116,10 @@ class DocumentRouterEngine:
                 keyword_text=tier_2_text,
                 llm_text=multi_page_text,
             )
-            
+
             # Merge debug info safely
             debug_info.update(cls_debug_info)
-            
+
             # Preserve streaming logs from the DB before overwriting
             try:
                 db_job = self.job_store.get_job(job_id)
@@ -124,7 +134,7 @@ class DocumentRouterEngine:
                 status="CLASSIFIED",
                 document_type=classification.document_type.value,
                 classification_tier=classification.tier,
-                debug_info=json.dumps(debug_info) if debug_info else None
+                debug_info=json.dumps(debug_info) if debug_info else None,
             )
 
             logger.info(
@@ -143,7 +153,9 @@ class DocumentRouterEngine:
                 elapsed = round(time.time() - start_time, 1)
                 self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
                 res = self._build_result(
-                    job_id, processed_path, classification,
+                    job_id,
+                    processed_path,
+                    classification,
                     message="Routed to manual review queue",
                     debug_info=debug_info,
                 )
@@ -162,7 +174,9 @@ class DocumentRouterEngine:
             elapsed = round(time.time() - start_time, 1)
             self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
             res = self._build_result(
-                job_id, processed_path, classification,
+                job_id,
+                processed_path,
+                classification,
                 pipeline_result=pipeline_result,
                 debug_info=debug_info,
             )
@@ -173,13 +187,22 @@ class DocumentRouterEngine:
             logger.exception("Pipeline processing failed: file=%s", saved_path.name)
             elapsed = round(time.time() - start_time, 1)
             return self._build_error_result(
-                job_id, saved_path, exc, debug_info, classification, elapsed,
+                job_id,
+                saved_path,
+                exc,
+                debug_info,
+                classification,
+                elapsed,
             )
 
         except Exception as exc:
             logger.exception("Routing failed: file=%s", saved_path.name)
             return self._build_error_result(
-                job_id, saved_path, exc, debug_info, classification,
+                job_id,
+                saved_path,
+                exc,
+                debug_info,
+                classification,
             )
 
     # ── Helpers ──────────────────────────────────────────────────
@@ -238,7 +261,7 @@ class DocumentRouterEngine:
             "confidence": classification.confidence,
             "status": "COMPLETED",
         }
-        
+
         # Add available outputs links
         stem = path.stem
         outputs = []
@@ -268,11 +291,11 @@ class DocumentRouterEngine:
             result["message"] = message
         if pipeline_result:
             result["pipeline_result"] = pipeline_result
-            
+
         if debug_info:
             if "pdf_traits" in debug_info:
                 result["pdf_traits"] = debug_info["pdf_traits"]
             if config.DEBUG_MODE:
                 result["debug"] = debug_info
-                
+
         return result

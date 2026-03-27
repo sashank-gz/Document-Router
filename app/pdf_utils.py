@@ -4,12 +4,13 @@ PDF utilities: rotation normalization, trait analysis, and password unlock.
 Uses PyMuPDF (fitz) for low-level PDF inspection.
 """
 
-import fitz
 import logging
 from pathlib import Path
-from . import config
+
+import fitz
 
 logger = logging.getLogger(__name__)
+
 
 def normalize_pdf(file_path: Path | str) -> Path:
     """Detects rotation and prepares a sanitized PDF if needed."""
@@ -18,22 +19,22 @@ def normalize_pdf(file_path: Path | str) -> Path:
         if doc.needs_pass:
             doc.close()
             return Path(file_path)
-            
+
         needs_rewrite = False
         for page in doc:
             if page.rotation != 0:
                 needs_rewrite = True
-                
+
         if needs_rewrite:
-            # To thoroughly bake rotation would require re-generating pages via images 
-            # or low-level affine transformations which break simple text layers. 
+            # To thoroughly bake rotation would require re-generating pages via images
+            # or low-level affine transformations which break simple text layers.
             # For 100% free mode, we trust RapidOCR which is somewhat tolerant of rotation metadata.
             logger.info("Rotated pages detected. RapidOCR will attempt structure extraction.")
-            
+
         doc.close()
     except Exception as e:
         logger.warning("Normalization skipped: %s", e)
-        
+
     return Path(file_path)
 
 
@@ -106,7 +107,7 @@ def analyze_pdf(file_path: Path | str) -> dict:
     for page in doc:
         page_traits = _classify_page(page)
         all_traits |= page_traits
-        base_types |= (page_traits & BASE_CATEGORY)
+        base_types |= page_traits & BASE_CATEGORY
 
     doc.close()
 

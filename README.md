@@ -165,15 +165,27 @@ See `config/README.txt` for detailed instructions.
 | `GET` | `/view/{filename}` | View processed file (MD/JSON/HTML) |
 | `GET` | `/health` | Health check |
 
-## Testing
+## Code Quality & Testing
 
 ```bash
-# Install test dependencies
-pip install pytest
+# Install dev tools (one-time)
+pip install black ruff pytest pre-commit
 
-# Run all tests
+# Lint (check for errors)
+ruff check app/ tests/
+
+# Lint + auto-fix (imports, style)
+ruff check app/ tests/ --fix
+
+# Format (auto-apply)
+black app/ tests/
+
+# Run tests
 python -m pytest tests/ -v
 ```
+
+**Pre-commit hooks** run Black and Ruff automatically on every `git commit`.
+Install once: `pre-commit install`. To skip: `git commit --no-verify`.
 
 ## Environment Variables
 

@@ -1,0 +1,33 @@
+[project]
+requires-python = ">=3.10"
+
+# ── Black (formatter) ────────────────────────────────────────────────
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+# ── Ruff (linter) ────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# E = pycodestyle errors, F = pyflakes, I = isort, UP = pyupgrade, B = bugbear
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",   # line too long (Black handles this)
+    "B008",   # do not perform function call in argument defaults (FastAPI uses this pattern)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/config.py" = ["E402"]            # .env must load before settings-dependent imports
+"app/main.py" = ["E402"]              # startup-time env setup before imports
+"app/llm_classifier.py" = ["E402"]    # imports after config setup
+
+# ── Pytest ───────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

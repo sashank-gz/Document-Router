@@ -172,52 +172,52 @@ class DocumentRouterEngine:
         except PipelineError as exc:
             logger.exception("Pipeline processing failed: file=%s", saved_path.name)
             elapsed = round(time.time() - start_time, 1)
-            self.job_store.update_job(job_id, status="FAILED", extraction_time=elapsed)
-            result = {
-                "job_id": job_id,
-                "file_name": saved_path.name,
-                "status": "FAILED",
-                "error": str(exc),
-                "pdf_traits": debug_info.get("pdf_traits", [])
-            }
-            # Include classification data if available
-            if classification:
-                result["document_type"] = classification.document_type.value
-                result["pipeline"] = classification.pipeline.value
-                result["classification_tier"] = classification.tier
-                result["confidence"] = classification.confidence
-                if classification.pipeline == Pipeline.OCR:
-                    result["pipeline_url"] = config.OCR_UI_URL
-                elif classification.pipeline == Pipeline.LLM:
-                    result["pipeline_url"] = config.LLM_UI_URL
-            
-            self.job_store.update_job(job_id, pipeline_url=result.get("pipeline_url"))
-            return result
+            return self._build_error_result(
+                job_id, saved_path, exc, debug_info, classification, elapsed,
+            )
 
         except Exception as exc:
             logger.exception("Routing failed: file=%s", saved_path.name)
-            self.job_store.update_job(job_id, status="FAILED")
-            result = {
-                "job_id": job_id,
-                "file_name": saved_path.name,
-                "status": "FAILED",
-                "error": str(exc),
-                "pdf_traits": debug_info.get("pdf_traits", [])
-            }
-            if classification:
-                result["document_type"] = classification.document_type.value
-                result["pipeline"] = classification.pipeline.value
-                result["classification_tier"] = classification.tier
-                result["confidence"] = classification.confidence
-                if classification.pipeline == Pipeline.OCR:
-                    result["pipeline_url"] = config.OCR_UI_URL
-                elif classification.pipeline == Pipeline.LLM:
-                    result["pipeline_url"] = config.LLM_UI_URL
-            
-            self.job_store.update_job(job_id, pipeline_url=result.get("pipeline_url"))
-            return result
+            return self._build_error_result(
+                job_id, saved_path, exc, debug_info, classification,
+            )
 
     # ── Helpers ──────────────────────────────────────────────────
+
+    def _build_error_result(
+        self,
+        job_id: int,
+        saved_path: Path,
+        error: Exception,
+        debug_info: dict,
+        classification=None,
+        elapsed: float | None = None,
+    ) -> dict:
+        """Build a standardized error response dict."""
+        if elapsed is not None:
+            self.job_store.update_job(job_id, status="FAILED", extraction_time=elapsed)
+        else:
+            self.job_store.update_job(job_id, status="FAILED")
+
+        result: dict = {
+            "job_id": job_id,
+            "file_name": saved_path.name,
+            "status": "FAILED",
+            "error": str(error),
+            "pdf_traits": debug_info.get("pdf_traits", []),
+        }
+        if classification:
+            result["document_type"] = classification.document_type.value
+            result["pipeline"] = classification.pipeline.value
+            result["classification_tier"] = classification.tier
+            result["confidence"] = classification.confidence
+            if classification.pipeline == Pipeline.OCR:
+                result["pipeline_url"] = config.OCR_UI_URL
+            elif classification.pipeline == Pipeline.LLM:
+                result["pipeline_url"] = config.LLM_UI_URL
+
+        self.job_store.update_job(job_id, pipeline_url=result.get("pipeline_url"))
+        return result
 
     @staticmethod
     def _build_result(

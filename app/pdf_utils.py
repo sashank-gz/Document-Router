@@ -1,3 +1,9 @@
+"""
+PDF utilities: rotation normalization, trait analysis, and password unlock.
+
+Uses PyMuPDF (fitz) for low-level PDF inspection.
+"""
+
 import fitz
 import logging
 from pathlib import Path
@@ -26,7 +32,7 @@ def normalize_pdf(file_path: Path | str) -> Path:
             
         doc.close()
     except Exception as e:
-        logger.warning(f"Normalization skipped: {e}")
+        logger.warning("Normalization skipped: %s", e)
         
     return Path(file_path)
 
@@ -131,5 +137,5 @@ def unlock_pdf(file_path: Path | str, password: str) -> bool:
                 return True
         doc.close()
     except Exception as e:
-        logger.error("Unlock failed: %e", e)
+        logger.error("Unlock failed: %s", e)
     return False

@@ -1,3 +1,9 @@
+"""
+Job tracking models and SQLite persistence.
+
+Provides ``JobRecord`` (Pydantic model) and ``JobStore`` (SQLite CRUD).
+"""
+
 from __future__ import annotations
 
 import sqlite3

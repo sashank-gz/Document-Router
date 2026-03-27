@@ -70,9 +70,6 @@ def _classify_by_keywords(text: str) -> Optional[ClassificationResult]:
 # ── Orchestrator ─────────────────────────────────────────────────────
 
 
-# ── Orchestrator ─────────────────────────────────────────────────────
-
-
 def classify_document(
     filename: str,
     keyword_text: str,
@@ -137,11 +134,7 @@ def classify_document(
         )
 
     # 4. Tier 3 (LLM) - Tie-breaker OR Fallback
-    # Triggered if: 
-    # a) No match yet 
-    # b) Conflict detected between T1 and T2
-    is_conflict = (t1_result and t2_result and t1_result.document_type != t2_result.document_type)
-    
+    # Triggered if: a) No match yet  b) Conflict detected between T1 and T2
     if (not result or is_conflict) and llm_text and llm_text.strip():
         try:
             from .llm_classifier import classify_with_llm

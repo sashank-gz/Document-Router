@@ -6,10 +6,6 @@ API endpoints for uploading PDFs, checking job status, and health.
 
 from __future__ import annotations
 
-import os
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
-
 import logging
 from pathlib import Path
 from typing import Iterable, Optional
@@ -88,6 +84,7 @@ PROCESSED_DIR = BASE_DIR / "processed"
 DB_PATH = BASE_DIR / "jobs.db"
 
 STATIC_DIR = BASE_DIR / "static"
+TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -318,61 +315,15 @@ def view_processed_file(filename: str):
     if m:
         display_name = m.group(1)
 
-    viewer_html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>{html_mod.escape(display_name)}</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            background: #0F1117;
-            color: #E2E8F0;
-            font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-        }}
-        .toolbar {{
-            position: sticky; top: 0; z-index: 10;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 20px;
-            background: #1A1D28;
-            border-bottom: 1px solid #2D3348;
-        }}
-        .toolbar-title {{
-            font-weight: 600; font-size: 0.9rem; color: #A5B4FC;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }}
-        .toolbar-actions a, .toolbar-actions button {{
-            padding: 6px 14px; border-radius: 6px; font-size: 0.78rem;
-            text-decoration: none; font-weight: 500; cursor: pointer; border: none;
-        }}
-        .btn-back {{
-            background: #2D3348; color: #E2E8F0;
-        }}
-        .btn-back:hover {{ background: #3D4460; }}
-        .btn-download {{
-            background: #4F46E5; color: white; margin-left: 8px;
-        }}
-        .btn-download:hover {{ background: #4338CA; }}
-        .content {{
-            padding: 20px 24px;
-            overflow-x: auto;
-            white-space: pre;
-        }}
-    </style>
-</head>
-<body>
-    <div class="toolbar">
-        <span class="toolbar-title">{html_mod.escape(display_name)}</span>
-        <div class="toolbar-actions">
-            <a href="javascript:history.back()" class="btn-back">← Back</a>
-            <a href="/processed/{html_mod.escape(filename)}" download class="btn-download">↓ Download</a>
-        </div>
-    </div>
-    <div class="content">{escaped}</div>
-</body>
-</html>"""
+    # Load the viewer HTML template and render with safe substitution
+    from string import Template as StringTemplate
+    tpl_path = TEMPLATES_DIR / "viewer.html"
+    tpl = StringTemplate(tpl_path.read_text(encoding="utf-8"))
+    viewer_html = tpl.safe_substitute(
+        display_name=html_mod.escape(display_name),
+        filename=html_mod.escape(filename),
+        content=escaped,
+    )
     return HTMLResponse(content=viewer_html)
 
 

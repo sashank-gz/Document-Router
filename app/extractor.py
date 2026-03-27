@@ -31,6 +31,30 @@ logger = logging.getLogger(__name__)
 _LARGE_FILE_THRESHOLD_BYTES = 50 * 1024 * 1024
 
 
+def _save_exports(doc, base_path: Path, suffix: str = "") -> None:
+    """Persist Docling exports (MD/JSON/HTML) based on config flags.
+
+    Parameters
+    ----------
+    doc : Docling document object with export methods.
+    base_path : Path to the source PDF (used to derive output filenames).
+    suffix : Optional suffix appended to the stem (e.g. "_handwritten").
+    """
+    import json
+
+    stem = f"{base_path.stem}{suffix}"
+    parent = base_path.parent
+
+    if config.DOCLING_SAVE_MD:
+        (parent / f"{stem}.md").write_text(doc.export_to_markdown(), encoding="utf-8")
+    if config.DOCLING_SAVE_JSON:
+        (parent / f"{stem}.json").write_text(
+            json.dumps(doc.export_to_dict(), indent=2), encoding="utf-8"
+        )
+    if config.DOCLING_SAVE_HTML:
+        (parent / f"{stem}.html").write_text(doc.export_to_html(), encoding="utf-8")
+
+
 class AdvancedDoclingExtractor:
     """Production-grade Document Extractor utilizing customized local OCR and table parsing."""
 
@@ -53,25 +77,8 @@ class AdvancedDoclingExtractor:
         """Runs the intensive Docling pipeline safely and emits Markdown."""
         try:
             doc = self.doc_converter.convert(str(source)).document
-
             md_text = doc.export_to_markdown()
-
-            base_path = Path(source)
-            if config.DOCLING_SAVE_MD:
-                (base_path.parent / f"{base_path.stem}.md").write_text(md_text, encoding="utf-8")
-
-            if config.DOCLING_SAVE_JSON:
-                import json
-
-                (base_path.parent / f"{base_path.stem}.json").write_text(
-                    json.dumps(doc.export_to_dict(), indent=2), encoding="utf-8"
-                )
-
-            if config.DOCLING_SAVE_HTML:
-                (base_path.parent / f"{base_path.stem}.html").write_text(
-                    doc.export_to_html(), encoding="utf-8"
-                )
-
+            _save_exports(doc, Path(source))
             return md_text
         except Exception as exc:
             source_name = Path(source).name if isinstance(source, Path | str) else str(source)
@@ -149,23 +156,7 @@ class HandwrittenDoclingExtractor:
         try:
             doc = self.doc_converter.convert(str(source)).document
             md_text = doc.export_to_markdown()
-
-            # Persist auxiliary formats (same logic as AdvancedDoclingExtractor)
-            if config.DOCLING_SAVE_MD:
-                (source.parent / f"{source.stem}_handwritten.md").write_text(
-                    md_text, encoding="utf-8"
-                )
-            if config.DOCLING_SAVE_JSON:
-                import json
-
-                (source.parent / f"{source.stem}_handwritten.json").write_text(
-                    json.dumps(doc.export_to_dict(), indent=2), encoding="utf-8"
-                )
-            if config.DOCLING_SAVE_HTML:
-                (source.parent / f"{source.stem}_handwritten.html").write_text(
-                    doc.export_to_html(), encoding="utf-8"
-                )
-
+            _save_exports(doc, source, suffix="_handwritten")
             return md_text
         except Exception as exc:
             logger.exception("Handwritten extraction failed for file: %s", source.name)

@@ -14,8 +14,10 @@ from . import config
 from .classifier import classify_document
 from .document_types import Pipeline
 from .file_service import (
+    build_pipeline_url,
     extract_classification_text,
     extract_pages_text,
+    list_available_outputs,
     move_to_processed,
     save_upload_file,
 )
@@ -71,54 +73,15 @@ class DocumentRouterEngine:
         try:
             import json
 
-            from .pdf_utils import analyze_pdf, normalize_pdf
-
-            # If not initialized, check encryption and properties
-            if initial_debug_info is None:
-                # 100% Free Outline requires pre-baking any rotation before extraction
-                saved_path = normalize_pdf(saved_path)
-
-                if config.ENABLE_PDF_TRAITS:
-                    pdf_info = analyze_pdf(saved_path)
-                    if pdf_info.get("is_encrypted"):
-                        self.job_store.update_job(
-                            job_id,
-                            status="REQUIRES_PASSWORD",
-                            debug_info=json.dumps(
-                                {"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])}
-                            ),
-                        )
-                        return {
-                            "job_id": job_id,
-                            "file_name": saved_path.name,
-                            "status": "REQUIRES_PASSWORD",
-                            "message": "The file is protected with a password.",
-                            "pdf_traits": pdf_info.get("traits", []),
-                        }
-                    debug_info["pdf_traits"] = pdf_info.get("traits", [])
-                else:
-                    debug_info["pdf_traits"] = []
-
-            # ── Classify ─────────────────────────────────────────
-            # Tier 2 text (multi-page based on config/settings.txt)
-            tier_2_text = extract_classification_text(saved_path)
-
-            # Multi-page text for Tier 3 (LLM) — wider scope
-            multi_page_text = None
-            if config.GROQ_ENABLED or config.GEMINI_ENABLED:
-                multi_page_text = extract_pages_text(
-                    saved_path,
-                    max_pages=config.CLASSIFICATION_MAX_PAGES,
-                )
-
-            classification, cls_debug_info = classify_document(
-                filename=saved_path.name,
-                keyword_text=tier_2_text,
-                llm_text=multi_page_text,
+            # Step 1: Analyze PDF (normalize, detect traits, check encryption)
+            encrypted_result = self._analyze_pdf(
+                job_id, saved_path, debug_info, is_fresh=(initial_debug_info is None)
             )
+            if encrypted_result:
+                return encrypted_result
 
-            # Merge debug info safely
-            debug_info.update(cls_debug_info)
+            # Step 2: Classify
+            classification, debug_info = self._classify(saved_path, debug_info)
 
             # Preserve streaming logs from the DB before overwriting
             try:
@@ -146,42 +109,8 @@ class DocumentRouterEngine:
                 classification.confidence,
             )
 
-            # ── Route ────────────────────────────────────────────
-            if classification.pipeline == Pipeline.MANUAL:
-                self.job_store.update_job(job_id, status="ROUTED")
-                processed_path = move_to_processed(saved_path, self.processed_dir)
-                elapsed = round(time.time() - start_time, 1)
-                self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
-                res = self._build_result(
-                    job_id,
-                    processed_path,
-                    classification,
-                    message="Routed to manual review queue",
-                    debug_info=debug_info,
-                )
-                self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
-                return res
-
-            self.job_store.update_job(job_id, status="ROUTED")
-            self.job_store.update_job(job_id, status="PROCESSING")
-
-            if classification.pipeline == Pipeline.OCR:
-                pipeline_result = send_to_ocr_pipeline(saved_path)
-            else:
-                pipeline_result = send_to_llm_pipeline(saved_path)
-
-            processed_path = move_to_processed(saved_path, self.processed_dir)
-            elapsed = round(time.time() - start_time, 1)
-            self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
-            res = self._build_result(
-                job_id,
-                processed_path,
-                classification,
-                pipeline_result=pipeline_result,
-                debug_info=debug_info,
-            )
-            self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
-            return res
+            # Step 3: Route to pipeline
+            return self._route(job_id, saved_path, classification, debug_info, start_time)
 
         except PipelineError as exc:
             logger.exception("Pipeline processing failed: file=%s", saved_path.name)
@@ -205,7 +134,117 @@ class DocumentRouterEngine:
                 classification,
             )
 
-    # ── Helpers ──────────────────────────────────────────────────
+    # ── Sub-steps ────────────────────────────────────────────────
+
+    def _analyze_pdf(
+        self,
+        job_id: int,
+        saved_path: Path,
+        debug_info: dict,
+        *,
+        is_fresh: bool,
+    ) -> dict | None:
+        """Normalize PDF, detect traits, check encryption.
+
+        Returns a dict (early response) if the file is encrypted, else None.
+        """
+        import json
+
+        from .pdf_utils import analyze_pdf, normalize_pdf
+
+        if not is_fresh:
+            return None
+
+        saved_path = normalize_pdf(saved_path)
+
+        if config.ENABLE_PDF_TRAITS:
+            pdf_info = analyze_pdf(saved_path)
+            if pdf_info.get("is_encrypted"):
+                self.job_store.update_job(
+                    job_id,
+                    status="REQUIRES_PASSWORD",
+                    debug_info=json.dumps(
+                        {"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])}
+                    ),
+                )
+                return {
+                    "job_id": job_id,
+                    "file_name": saved_path.name,
+                    "status": "REQUIRES_PASSWORD",
+                    "message": "The file is protected with a password.",
+                    "pdf_traits": pdf_info.get("traits", []),
+                }
+            debug_info["pdf_traits"] = pdf_info.get("traits", [])
+        else:
+            debug_info["pdf_traits"] = []
+
+        return None
+
+    def _classify(self, saved_path: Path, debug_info: dict) -> tuple:
+        """Extract text and run the 3-tier classifier. Returns (classification, debug_info)."""
+        tier_2_text = extract_classification_text(saved_path)
+
+        multi_page_text = None
+        if config.GROQ_ENABLED or config.GEMINI_ENABLED:
+            multi_page_text = extract_pages_text(
+                saved_path,
+                max_pages=config.CLASSIFICATION_MAX_PAGES,
+            )
+
+        classification, cls_debug_info = classify_document(
+            filename=saved_path.name,
+            keyword_text=tier_2_text,
+            llm_text=multi_page_text,
+        )
+        debug_info.update(cls_debug_info)
+        return classification, debug_info
+
+    def _route(
+        self,
+        job_id: int,
+        saved_path: Path,
+        classification,
+        debug_info: dict,
+        start_time: float,
+    ) -> dict:
+        """Dispatch to the appropriate pipeline and finalize the job."""
+        import time
+
+        if classification.pipeline == Pipeline.MANUAL:
+            self.job_store.update_job(job_id, status="ROUTED")
+            processed_path = move_to_processed(saved_path, self.processed_dir)
+            elapsed = round(time.time() - start_time, 1)
+            self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
+            res = self._build_result(
+                job_id,
+                processed_path,
+                classification,
+                message="Routed to manual review queue",
+                debug_info=debug_info,
+            )
+            self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
+            return res
+
+        self.job_store.update_job(job_id, status="ROUTED")
+        self.job_store.update_job(job_id, status="PROCESSING")
+
+        if classification.pipeline == Pipeline.OCR:
+            pipeline_result = send_to_ocr_pipeline(saved_path)
+        else:
+            pipeline_result = send_to_llm_pipeline(saved_path)
+
+        processed_path = move_to_processed(saved_path, self.processed_dir)
+        elapsed = round(time.time() - start_time, 1)
+        self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
+        res = self._build_result(
+            job_id,
+            processed_path,
+            classification,
+            pipeline_result=pipeline_result,
+            debug_info=debug_info,
+        )
+        self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
+        return res
 
     def _build_error_result(
         self,
@@ -234,10 +273,7 @@ class DocumentRouterEngine:
             result["pipeline"] = classification.pipeline.value
             result["classification_tier"] = classification.tier
             result["confidence"] = classification.confidence
-            if classification.pipeline == Pipeline.OCR:
-                result["pipeline_url"] = config.OCR_UI_URL
-            elif classification.pipeline == Pipeline.LLM:
-                result["pipeline_url"] = config.LLM_UI_URL
+            result["pipeline_url"] = build_pipeline_url(classification.pipeline)
 
         self.job_store.update_job(job_id, pipeline_url=result.get("pipeline_url"))
         return result
@@ -262,31 +298,15 @@ class DocumentRouterEngine:
             "status": "COMPLETED",
         }
 
-        # Add available outputs links
-        stem = path.stem
-        outputs = []
-        for ext in [".md", ".json", ".html"]:
-            if (path.parent / f"{stem}{ext}").exists():
-                outputs.append(ext[1:].upper())
-        result["available_outputs"] = outputs
+        # Available export formats
+        result["available_outputs"] = list_available_outputs(path.parent, path.stem)
 
-        # Include the service URL so the frontend can link to it
-        if classification.pipeline == Pipeline.OCR:
-            url = config.OCR_UI_URL
-            if pipeline_result and isinstance(pipeline_result.get("response"), dict):
-                remote_file = pipeline_result["response"].get("filename")
-                if remote_file:
-                    sep = "&" if "?" in url else "?"
-                    url = f"{url}{sep}file={remote_file}"
-            result["pipeline_url"] = url
-        elif classification.pipeline == Pipeline.LLM:
-            url = config.LLM_UI_URL
-            if pipeline_result and isinstance(pipeline_result.get("response"), dict):
-                remote_file = pipeline_result["response"].get("filename")
-                if remote_file:
-                    sep = "&" if "?" in url else "?"
-                    url = f"{url}{sep}file={remote_file}"
-            result["pipeline_url"] = url
+        # Pipeline UI URL
+        remote_file = None
+        if pipeline_result and isinstance(pipeline_result.get("response"), dict):
+            remote_file = pipeline_result["response"].get("filename")
+        result["pipeline_url"] = build_pipeline_url(classification.pipeline, remote_file or None)
+
         if message:
             result["message"] = message
         if pipeline_result:

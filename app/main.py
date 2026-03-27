@@ -6,77 +6,27 @@ API endpoints for uploading PDFs, checking job status, and health.
 
 from __future__ import annotations
 
+import html as html_mod
 import json
 import logging
-from contextvars import ContextVar
+import re
 from pathlib import Path
+from string import Template as StringTemplate
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config
-from .document_types import Pipeline
+from .file_service import build_pipeline_url, list_available_outputs
+from .log_handler import JobStatusLogHandler, active_job_context
 from .models import JobRecord, JobStore
 from .router_engine import DocumentRouterEngine
 
-active_job_context = ContextVar("active_job", default=None)
-
-
-class JobStatusLogHandler(logging.Handler):
-    def __init__(self, job_store):
-        super().__init__()
-        self.job_store = job_store
-
-    def emit(self, record):
-        job_id = active_job_context.get()
-        if not job_id:
-            return
-
-        if record.levelno < logging.INFO:
-            return
-
-        name = record.name.lower()
-        if not ("docling" in name or "rapidocr" in name or "document-router" in name):
-            return
-
-        msg = record.getMessage().strip()
-
-        msg_lower = msg.lower()
-        if "get /" in msg_lower or "post /" in msg_lower or "http/1.1" in msg_lower:
-            return
-
-        if "C:\\" in msg or "D:\\" in msg or "Downloading" in msg:
-            if "File exists and is valid" in msg:
-                model_name = msg.split("\\")[-1]
-                msg = f"Verified model: {model_name}"
-            elif "Using" in msg and ".onnx" in msg:
-                model_name = msg.split("\\")[-1]
-                msg = f"Loaded model: {model_name}"
-            else:
-                return
-
-        if len(msg) > 90:
-            msg = msg[:87] + "..."
-
-        if msg in ("COMPLETED", "FAILED", "REQUIRES_PASSWORD"):
-            return
-
-        job = self.job_store.get_job(job_id)
-        if not job:
-            return
-
-        debug_info = job.debug_info or {}
-        logs = debug_info.get("logs", [])
-        logs.append(msg)
-        debug_info["logs"] = logs
-
-        try:
-            self.job_store.update_job(job_id, debug_info=json.dumps(debug_info))
-        except Exception:
-            pass
+# ── Constants ────────────────────────────────────────────────────────
+MAX_PASSWORD_ATTEMPTS = 5
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -129,7 +79,6 @@ def startup_event() -> None:
     job_store.initialize()
 
     # Log active LLM providers so the user knows what's configured
-    from . import config
 
     providers = []
     if config.GROQ_ENABLED:
@@ -142,9 +91,6 @@ def startup_event() -> None:
         logger.info("No LLM classification providers enabled — Tier 3 will be skipped")
 
     logger.info("Document Router Platform v2.0 started")
-
-
-from fastapi import BackgroundTasks
 
 
 @app.post("/upload")
@@ -203,7 +149,7 @@ def unlock_job(job_id: int, req: UnlockRequest) -> dict:
     debug_info = job.debug_info or {}
     attempts = debug_info.get("password_attempts", 0)
 
-    if attempts >= 5:
+    if attempts >= MAX_PASSWORD_ATTEMPTS:
         raise HTTPException(
             status_code=400, detail="Maximum password attempts exceeded. Job failed permanently."
         )
@@ -221,7 +167,7 @@ def unlock_job(job_id: int, req: UnlockRequest) -> dict:
     attempts += 1
     debug_info["password_attempts"] = attempts
 
-    if attempts >= 5:
+    if attempts >= MAX_PASSWORD_ATTEMPTS:
         job_store.update_job(job_id, status="FAILED", debug_info=json.dumps(debug_info))
         raise HTTPException(
             status_code=400, detail="Maximum password attempts exceeded. Job failed permanently."
@@ -229,30 +175,25 @@ def unlock_job(job_id: int, req: UnlockRequest) -> dict:
 
     job_store.update_job(job_id, debug_info=json.dumps(debug_info))
     raise HTTPException(
-        status_code=401, detail=f"Incorrect password. {5 - attempts} attempts remaining."
+        status_code=401,
+        detail=f"Incorrect password. {MAX_PASSWORD_ATTEMPTS - attempts} attempts remaining.",
     )
 
 
 def _enrich_job(job: JobRecord) -> JobRecord:
     """Add pipeline_url and available_outputs to a JobRecord."""
     if job.status == "COMPLETED" and not job.pipeline_url:
-        if job.route == Pipeline.OCR.value:
-            url = config.OCR_UI_URL
-            sep = "&" if "?" in url else "?"
-            job.pipeline_url = f"{url}{sep}file={job.file_name}"
-        elif job.route == Pipeline.LLM.value:
-            url = config.LLM_UI_URL
-            sep = "&" if "?" in url else "?"
-            job.pipeline_url = f"{url}{sep}file={job.file_name}"
+        from .document_types import Pipeline
 
-    # Check for available Docling exports
+        try:
+            pipeline = Pipeline(job.route)
+        except ValueError:
+            pipeline = None
+        if pipeline:
+            job.pipeline_url = build_pipeline_url(pipeline, job.file_name)
+
     if job.file_name:
-        stem = Path(job.file_name).stem
-        outputs = []
-        for ext in [".md", ".json", ".html"]:
-            if (PROCESSED_DIR / f"{stem}{ext}").exists():
-                outputs.append(ext[1:].upper())
-        job.available_outputs = outputs
+        job.available_outputs = list_available_outputs(PROCESSED_DIR, Path(job.file_name).stem)
 
     return job
 
@@ -288,57 +229,65 @@ def health_check() -> dict:
     return {"status": "ok", "service": "document-router-platform", "version": "2.0.0"}
 
 
+# ── Viewer helpers ───────────────────────────────────────────────────
+
+
+def _highlight_json(escaped_html: str) -> str:
+    """Apply syntax-coloring to HTML-escaped JSON text."""
+    # Keys (purple)
+    escaped_html = re.sub(
+        r"(&quot;[^&]*?&quot;)\s*:",
+        r'<span style="color:#C084FC">\1</span>:',
+        escaped_html,
+    )
+    # String values (green)
+    escaped_html = re.sub(
+        r":\s*(&quot;[^&]*?&quot;)",
+        r': <span style="color:#6EE7B7">\1</span>',
+        escaped_html,
+    )
+    # Numbers (orange)
+    escaped_html = re.sub(
+        r"(?<=: )(-?\d+\.?\d*)",
+        r'<span style="color:#FDBA74">\1</span>',
+        escaped_html,
+    )
+    # Booleans / null (blue)
+    escaped_html = re.sub(
+        r"(?<=: )(true|false|null)",
+        r'<span style="color:#93C5FD">\1</span>',
+        escaped_html,
+    )
+    return escaped_html
+
+
+def _strip_uuid_prefix(filename: str) -> str:
+    """Remove the 32-hex-char UUID prefix from a filename, if present."""
+    m = re.match(r"^[0-9a-f]{32}_(.+)$", filename, re.IGNORECASE)
+    return m.group(1) if m else filename
+
+
 @app.get("/view/{filename}")
 def view_processed_file(filename: str):
     """Serve a processed file (MD/JSON/HTML) wrapped in a styled viewer page."""
-    from fastapi.responses import HTMLResponse
-
     file_path = PROCESSED_DIR / filename
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
     content = file_path.read_text(encoding="utf-8", errors="replace")
-    import html as html_mod
 
-    # For JSON files: re-format with indentation and apply syntax highlighting
     is_json = filename.lower().endswith(".json")
     if is_json:
         try:
-            parsed = json.loads(content)
-            content = json.dumps(parsed, indent=2, ensure_ascii=False)
+            content = json.dumps(json.loads(content), indent=2, ensure_ascii=False)
         except Exception:
             pass
 
     escaped = html_mod.escape(content)
-
-    # Apply JSON syntax coloring after HTML-escaping
     if is_json:
-        import re as re_mod
+        escaped = _highlight_json(escaped)
 
-        # Color keys (purple), strings (green), numbers (orange), bools/null (blue)
-        escaped = re_mod.sub(
-            r"(&quot;[^&]*?&quot;)\s*:", r'<span style="color:#C084FC">\1</span>:', escaped
-        )
-        escaped = re_mod.sub(
-            r":\s*(&quot;[^&]*?&quot;)", r': <span style="color:#6EE7B7">\1</span>', escaped
-        )
-        escaped = re_mod.sub(
-            r"(?<=: )(-?\d+\.?\d*)", r'<span style="color:#FDBA74">\1</span>', escaped
-        )
-        escaped = re_mod.sub(
-            r"(?<=: )(true|false|null)", r'<span style="color:#93C5FD">\1</span>', escaped
-        )
-
-    # Extract original name (strip UUID prefix)
-    display_name = filename
-    import re
-
-    m = re.match(r"^[0-9a-f]{32}_(.+)$", filename, re.IGNORECASE)
-    if m:
-        display_name = m.group(1)
-
-    # Load the viewer HTML template and render with safe substitution
-    from string import Template as StringTemplate
+    display_name = _strip_uuid_prefix(filename)
 
     tpl_path = TEMPLATES_DIR / "viewer.html"
     tpl = StringTemplate(tpl_path.read_text(encoding="utf-8"))

@@ -1,5 +1,7 @@
 """
 File I/O utilities: save uploads, extract PDF text, move processed files.
+
+Also contains shared helpers used across main.py and router_engine.py.
 """
 
 from __future__ import annotations
@@ -11,11 +13,41 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
+from . import config
+from .document_types import Pipeline
 from .extractor import AdvancedDoclingExtractor
 
 _extractor = None
 
 logger = logging.getLogger(__name__)
+
+# Extensions that Docling can export
+EXPORT_EXTENSIONS: list[str] = [".md", ".json", ".html"]
+
+
+def build_pipeline_url(pipeline: Pipeline, file_name: str | None = None) -> str | None:
+    """Build the UI URL for a given pipeline, optionally appending a filename.
+
+    Returns None if the pipeline has no associated UI URL.
+    """
+    if pipeline == Pipeline.OCR:
+        url = config.OCR_UI_URL
+    elif pipeline == Pipeline.LLM:
+        url = config.LLM_UI_URL
+    else:
+        return None
+
+    if file_name:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}file={file_name}"
+    return url
+
+
+def list_available_outputs(processed_dir: Path, stem: str) -> list[str]:
+    """Return available export format labels (e.g. ['MD', 'JSON']) for a file."""
+    return [
+        ext[1:].upper() for ext in EXPORT_EXTENSIONS if (processed_dir / f"{stem}{ext}").exists()
+    ]
 
 
 async def save_upload_file(upload_file: UploadFile, uploads_dir: Path) -> Path:
@@ -82,7 +114,7 @@ def move_to_processed(file_path: Path, processed_dir: Path) -> Path:
     shutil.move(str(file_path), str(destination))
 
     # Move any exported docling auxiliary files
-    for ext in [".md", ".json", ".html"]:
+    for ext in EXPORT_EXTENSIONS:
         aux_file = file_path.parent / f"{file_path.stem}{ext}"
         if aux_file.exists():
             shutil.move(str(aux_file), str(processed_dir / f"{file_path.stem}{ext}"))

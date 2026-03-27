@@ -111,6 +111,7 @@ def classify_document(
         if t1_result.document_type == t2_result.document_type:
             logger.info("Tiers 1 & 2 agree: %s", t1_result.document_type.value)
             result = t2_result  # Higher confidence/Keyword match wins
+            result.tier = "both"
         else:
             logger.warning(
                 "CONFLICT: Filename says %s, Keywords say %s. Triggering Tie-breaker (Tier 3).",

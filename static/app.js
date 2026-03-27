@@ -461,9 +461,9 @@ function renderJobsPage() {
 
         // ── Tier column ────────────────────────────────────
         const tierRaw = job.classification_tier || "";
-        const tierLabels = { "filename": "Tier 1", "keyword": "Tier 2", "llm": "Tier 3", "none": "—" };
+        const tierLabels = { "filename": "Tier 1", "keyword": "Tier 2", "llm": "Tier 3", "both": "Both(T1&T2)", "none": "—" };
         const tierDisplay = tierLabels[tierRaw] || tierRaw || "—";
-        const tierColors = { "Tier 1": "#6366F1", "Tier 2": "#10B981", "Tier 3": "#F59E0B" };
+        const tierColors = { "Tier 1": "#6366F1", "Tier 2": "#10B981", "Tier 3": "#F59E0B", "Both(T1&T2)": "#8B5CF6" };
         const tierColor = tierColors[tierDisplay] || "var(--text-muted)";
 
         return `

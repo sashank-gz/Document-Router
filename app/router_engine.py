@@ -5,7 +5,9 @@ dispatch, and job status tracking for each uploaded document.
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from pathlib import Path
 
 from fastapi import UploadFile
@@ -52,7 +54,6 @@ class DocumentRouterEngine:
             raise ValueError("Job not found")
         saved_path = self.uploads_dir / job.file_name
 
-        # Merge existing debug_info into a new dict
         from .pdf_utils import analyze_pdf
 
         pdf_info = analyze_pdf(saved_path)
@@ -60,19 +61,20 @@ class DocumentRouterEngine:
 
         return self._process_file(job_id, saved_path, debug_info)
 
+    def _update_job_status(self, job_id: int, status: str, **kwargs) -> None:
+        """Helper to update job status and optionally other fields like debug_info."""
+        if "debug_info" in kwargs and isinstance(kwargs["debug_info"], dict):
+            kwargs["debug_info"] = json.dumps(kwargs["debug_info"])
+        self.job_store.update_job(job_id, status=status, **kwargs)
+
     def _process_file(
         self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None
     ) -> dict:
         """Internal synchronous method to run the classification and pipeline."""
-        import time
-
         start_time = time.time()
-        classification = None
         debug_info = initial_debug_info or {}
 
         try:
-            import json
-
             # Step 1: Analyze PDF (normalize, detect traits, check encryption)
             saved_path, encrypted_result = self._analyze_pdf(
                 job_id, saved_path, debug_info, is_fresh=(initial_debug_info is None)
@@ -83,21 +85,18 @@ class DocumentRouterEngine:
             # Step 2: Classify
             classification, debug_info = self._classify(saved_path, debug_info)
 
-            # Preserve streaming logs from the DB before overwriting
-            try:
-                db_job = self.job_store.get_job(job_id)
-                if db_job and db_job.debug_info and "logs" in db_job.debug_info:
-                    debug_info["logs"] = db_job.debug_info["logs"]
-            except Exception:
-                pass
+            # Preserve logs from the database
+            db_job = self.job_store.get_job(job_id)
+            if db_job and db_job.debug_info and "logs" in db_job.debug_info:
+                debug_info["logs"] = db_job.debug_info["logs"]
 
-            self.job_store.update_job(
+            self._update_job_status(
                 job_id,
-                route=classification.pipeline.value,
                 status="CLASSIFIED",
+                route=classification.pipeline.value,
                 document_type=classification.document_type.value,
                 classification_tier=classification.tier,
-                debug_info=json.dumps(debug_info) if debug_info else None,
+                debug_info=debug_info,
             )
 
             logger.info(
@@ -112,29 +111,35 @@ class DocumentRouterEngine:
             # Step 3: Route to pipeline
             return self._route(job_id, saved_path, classification, debug_info, start_time)
 
-        except PipelineError as exc:
-            logger.exception("Pipeline processing failed: file=%s", saved_path.name)
-            elapsed = round(time.time() - start_time, 1)
-            return self._build_error_result(
+        except (PipelineError, Exception) as exc:
+            elapsed = round(time.time() - start_time, 1) if "start_time" in locals() else None
+            return self._handle_error(
                 job_id,
                 saved_path,
                 exc,
                 debug_info,
-                classification,
-                elapsed,
+                classification=locals().get("classification"),
+                elapsed=elapsed,
             )
 
-        except Exception as exc:
-            logger.exception("Routing failed: file=%s", saved_path.name)
-            return self._build_error_result(
-                job_id,
-                saved_path,
-                exc,
-                debug_info,
-                classification,
-            )
+    def _handle_error(
+        self,
+        job_id: int,
+        saved_path: Path,
+        error: Exception,
+        debug_info: dict,
+        classification=None,
+        elapsed: float | None = None,
+    ) -> dict:
+        """Centralized error handling for the routing engine."""
+        log_msg = (
+            "Pipeline processing failed" if isinstance(error, PipelineError) else "Routing failed"
+        )
+        logger.exception("%s: file=%s", log_msg, saved_path.name)
 
-    # Sub-steps
+        return self._build_error_result(
+            job_id, saved_path, error, debug_info, classification, elapsed
+        )
 
     def _analyze_pdf(
         self,
@@ -144,12 +149,7 @@ class DocumentRouterEngine:
         *,
         is_fresh: bool,
     ) -> tuple[Path, dict | None]:
-        """Normalize PDF, detect traits, check encryption.
-
-        Returns (possibly normalized path, early response).
-        """
-        import json
-
+        """Normalize PDF, detect traits, check encryption."""
         from .pdf_utils import analyze_pdf, normalize_pdf
 
         if not is_fresh:
@@ -159,29 +159,28 @@ class DocumentRouterEngine:
 
         if config.ENABLE_PDF_TRAITS:
             pdf_info = analyze_pdf(saved_path)
+            traits = pdf_info.get("traits", [])
             if pdf_info.get("is_encrypted"):
-                self.job_store.update_job(
+                self._update_job_status(
                     job_id,
                     status="REQUIRES_PASSWORD",
-                    debug_info=json.dumps(
-                        {"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])}
-                    ),
+                    debug_info={"password_attempts": 0, "pdf_traits": traits},
                 )
                 return saved_path, {
                     "job_id": job_id,
                     "file_name": saved_path.name,
                     "status": "REQUIRES_PASSWORD",
                     "message": "The file is protected with a password.",
-                    "pdf_traits": pdf_info.get("traits", []),
+                    "pdf_traits": traits,
                 }
-            debug_info["pdf_traits"] = pdf_info.get("traits", [])
+            debug_info["pdf_traits"] = traits
         else:
             debug_info["pdf_traits"] = []
 
         return saved_path, None
 
     def _classify(self, saved_path: Path, debug_info: dict) -> tuple:
-        """Extract text and run the 3-tier classifier. Returns (classification, debug_info)."""
+        """Extract text and run the 3-tier classifier."""
         tier_2_text = extract_classification_text(saved_path)
 
         multi_page_text = None
@@ -208,42 +207,38 @@ class DocumentRouterEngine:
         start_time: float,
     ) -> dict:
         """Dispatch to the appropriate pipeline and finalize the job."""
-        import time
+        self._update_job_status(job_id, status="ROUTED")
+
+        pipeline_result = None
+        message = None
 
         if classification.pipeline == Pipeline.MANUAL:
-            self.job_store.update_job(job_id, status="ROUTED")
-            processed_path = move_to_processed(saved_path, self.processed_dir)
-            elapsed = round(time.time() - start_time, 1)
-            self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
-            res = self._build_result(
-                job_id,
-                processed_path,
-                classification,
-                message="Routed to manual review queue",
-                debug_info=debug_info,
-            )
-            self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
-            return res
-
-        self.job_store.update_job(job_id, status="ROUTED")
-        self.job_store.update_job(job_id, status="PROCESSING")
-
-        if classification.pipeline == Pipeline.OCR:
-            pipeline_result = send_to_ocr_pipeline(saved_path)
+            message = "Routed to manual review queue"
         else:
-            pipeline_result = send_to_llm_pipeline(saved_path)
+            self._update_job_status(job_id, status="PROCESSING")
+            if classification.pipeline == Pipeline.OCR:
+                pipeline_result = send_to_ocr_pipeline(saved_path)
+            else:
+                pipeline_result = send_to_llm_pipeline(saved_path)
 
         processed_path = move_to_processed(saved_path, self.processed_dir)
         elapsed = round(time.time() - start_time, 1)
-        self.job_store.update_job(job_id, status="COMPLETED", extraction_time=elapsed)
+
         res = self._build_result(
             job_id,
             processed_path,
             classification,
+            message=message,
             pipeline_result=pipeline_result,
             debug_info=debug_info,
         )
-        self.job_store.update_job(job_id, pipeline_url=res.get("pipeline_url"))
+
+        self._update_job_status(
+            job_id,
+            status="COMPLETED",
+            extraction_time=elapsed,
+            pipeline_url=res.get("pipeline_url"),
+        )
         return res
 
     def _build_error_result(
@@ -256,10 +251,7 @@ class DocumentRouterEngine:
         elapsed: float | None = None,
     ) -> dict:
         """Build a standardized error response dict."""
-        if elapsed is not None:
-            self.job_store.update_job(job_id, status="FAILED", extraction_time=elapsed)
-        else:
-            self.job_store.update_job(job_id, status="FAILED")
+        update_fields = {"extraction_time": elapsed} if elapsed is not None else {}
 
         result: dict = {
             "job_id": job_id,
@@ -268,14 +260,21 @@ class DocumentRouterEngine:
             "error": str(error),
             "pdf_traits": debug_info.get("pdf_traits", []),
         }
-        if classification:
-            result["document_type"] = classification.document_type.value
-            result["pipeline"] = classification.pipeline.value
-            result["classification_tier"] = classification.tier
-            result["confidence"] = classification.confidence
-            result["pipeline_url"] = build_pipeline_url(classification.pipeline)
 
-        self.job_store.update_job(job_id, pipeline_url=result.get("pipeline_url"))
+        if classification:
+            result.update(
+                {
+                    "document_type": classification.document_type.value,
+                    "pipeline": classification.pipeline.value,
+                    "classification_tier": classification.tier,
+                    "confidence": classification.confidence,
+                    "pipeline_url": build_pipeline_url(classification.pipeline),
+                }
+            )
+
+        self._update_job_status(
+            job_id, status="FAILED", pipeline_url=result.get("pipeline_url"), **update_fields
+        )
         return result
 
     @staticmethod
@@ -296,10 +295,8 @@ class DocumentRouterEngine:
             "classification_tier": classification.tier,
             "confidence": classification.confidence,
             "status": "COMPLETED",
+            "available_outputs": list_available_outputs(path.parent, path.stem),
         }
-
-        # Available export formats
-        result["available_outputs"] = list_available_outputs(path.parent, path.stem)
 
         # Pipeline UI URL
         remote_file = None

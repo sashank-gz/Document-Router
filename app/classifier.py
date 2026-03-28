@@ -25,18 +25,12 @@ from .document_types import (
 logger = logging.getLogger(__name__)
 
 
-# ── Classification result ────────────────────────────────────────────
-
-
 @dataclass
 class ClassificationResult:
     document_type: DocumentType
     pipeline: Pipeline
     tier: str  # which tier produced the result: "filename" | "keyword" | "llm"
     confidence: float = 1.0
-
-
-# ── Tier 1: Filename hints ───────────────────────────────────────────
 
 
 def _classify_by_filename(filename: str) -> ClassificationResult | None:
@@ -53,11 +47,8 @@ def _classify_by_filename(filename: str) -> ClassificationResult | None:
     return None
 
 
-# ── Tier 2: First-page text keyword hints ────────────────────────────
-
-
 def _classify_by_keywords(text: str) -> ClassificationResult | None:
-    """Tier 2 – match document type by text keywords. Normalizes whitespace so phrases match across line breaks."""
+    """Tier 2 – match document type by text keywords. Normalizes whitespace."""
     text_lower = " ".join((text or "").lower().split())
     for type_name, hints in KEYWORD_HINTS.items():
         if any(hint in text_lower for hint in hints):
@@ -70,7 +61,43 @@ def _classify_by_keywords(text: str) -> ClassificationResult | None:
     return None
 
 
-# ── Orchestrator ─────────────────────────────────────────────────────
+def _resolve_classification(
+    t1_result: ClassificationResult | None,
+    t2_result: ClassificationResult | None,
+    debug: dict,
+) -> tuple[ClassificationResult | None, bool]:
+    """Resolve conflicts between Tier 1 (Filename) and Tier 2 (Keywords)."""
+    # Case A: Both match
+    if t1_result and t2_result:
+        if t1_result.document_type == t2_result.document_type:
+            logger.info("Tiers 1 & 2 agree: %s", t1_result.document_type.value)
+            t2_result.tier = "both"
+            return t2_result, False
+        else:
+            logger.warning(
+                "CONFLICT: Filename says %s, Keywords say %s. Triggering Tie-breaker (Tier 3).",
+                t1_result.document_type.value,
+                t2_result.document_type.value,
+            )
+            debug["conflict_detected"] = {
+                "tier_1": t1_result.document_type.value,
+                "tier_2": t2_result.document_type.value,
+            }
+            return None, True
+
+    # Case B: Only Tier 2 matches
+    if t2_result:
+        logger.info("Tier 2 match: %s", t2_result.document_type.value)
+        return t2_result, False
+
+    # Case C: Only Tier 1 matches (Now ignored as a standalone classifier)
+    if t1_result:
+        logger.info(
+            "Tier 1 match (%s) but Tier 2 failed. Ignoring T1 and falling back to Tier 3.",
+            t1_result.document_type.value,
+        )
+
+    return None, False
 
 
 def classify_document(
@@ -80,10 +107,6 @@ def classify_document(
 ) -> tuple[ClassificationResult, dict]:
     """
     Run the 3-tier classification pipeline with conflict resolution.
-
-    - Tier 1 (Filename) and Tier 2 (Keywords) are evaluated together.
-    - If they disagree, Tier 3 (LLM) acts as the tie-breaker.
-    - Confidence scores are weighted based on config/settings.txt.
     """
     from . import config
 
@@ -103,50 +126,16 @@ def classify_document(
         t2_result.confidence = config.CONFIDENCE_KEYWORD
 
     # 3. Decision Logic
-    result: ClassificationResult | None = None
-    is_conflict = False
-
-    # Case A: Both match
-    if t1_result and t2_result:
-        if t1_result.document_type == t2_result.document_type:
-            logger.info("Tiers 1 & 2 agree: %s", t1_result.document_type.value)
-            result = t2_result  # Higher confidence/Keyword match wins
-            result.tier = "both"
-        else:
-            logger.warning(
-                "CONFLICT: Filename says %s, Keywords say %s. Triggering Tie-breaker (Tier 3).",
-                t1_result.document_type.value,
-                t2_result.document_type.value,
-            )
-            is_conflict = True
-            debug["conflict_detected"] = {
-                "tier_1": t1_result.document_type.value,
-                "tier_2": t2_result.document_type.value,
-            }
-
-    # Case B: Only Tier 2 matches
-    elif t2_result:
-        result = t2_result
-        logger.info("Tier 2 match: %s", result.document_type.value)
-
-    # Case C: Only Tier 1 matches (Now ignored as a standalone classifier)
-    elif t1_result:
-        logger.info(
-            "Tier 1 match (%s) but Tier 2 failed. Ignoring T1 and falling back to Tier 3.",
-            t1_result.document_type.value,
-        )
+    result, is_conflict = _resolve_classification(t1_result, t2_result, debug)
 
     # 4. Tier 3 (LLM) - Tie-breaker OR Fallback
-    # Triggered if: a) No match yet  b) Conflict detected between T1 and T2
     if (not result or is_conflict) and llm_text and llm_text.strip():
         try:
             from .llm_classifier import classify_with_llm
 
             llm_result, llm_debug = classify_with_llm(llm_text)
-
             if config.DEBUG_MODE:
                 debug["tier_3_llm"] = llm_debug
-
             if llm_result:
                 logger.info("Tier 3 (LLM) resolution: %s", llm_result.document_type.value)
                 result = llm_result
@@ -165,10 +154,14 @@ def classify_document(
             confidence=0.0,
         )
 
-    # Populate debug info
+    # Populate final debug info
     if config.DEBUG_MODE:
-        debug["tier_1_result"] = t1_result.document_type.value if t1_result else None
-        debug["tier_2_result"] = t2_result.document_type.value if t2_result else None
-        debug["final_result"] = result.document_type.value
+        debug.update(
+            {
+                "tier_1_result": t1_result.document_type.value if t1_result else None,
+                "tier_2_result": t2_result.document_type.value if t2_result else None,
+                "final_result": result.document_type.value,
+            }
+        )
 
     return result, debug

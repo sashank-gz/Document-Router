@@ -31,26 +31,33 @@ def _safe_body_preview(body: str, limit: int = 200) -> str:
 
 def _post_file(endpoint: str, file_path: Path) -> dict:
     """POST a PDF to an extraction service and return the parsed response."""
-    with file_path.open("rb") as f:
-        files = {"file": (file_path.name, f, "application/pdf")}
-        response = requests.post(endpoint, files=files, timeout=config.PIPELINE_TIMEOUT)
+    try:
+        with file_path.open("rb") as f:
+            files = {"file": (file_path.name, f, "application/pdf")}
+            response = requests.post(endpoint, files=files, timeout=config.PIPELINE_TIMEOUT)
 
-    if response.status_code >= 400:
-        logger.error(
-            "Pipeline call failed: endpoint=%s status=%s body_preview=%s",
-            endpoint,
-            response.status_code,
-            _safe_body_preview(response.text),
-        )
-        raise PipelineError(f"Pipeline call failed with status {response.status_code}")
+        if response.status_code >= 400:
+            logger.error(
+                "Pipeline call failed: endpoint=%s status=%s body_preview=%s",
+                endpoint,
+                response.status_code,
+                _safe_body_preview(response.text),
+            )
+            # Standardized error message without leaking sensitive internal details
+            raise PipelineError(f"Extraction pipeline returned status {response.status_code}")
 
-    content_type = response.headers.get("content-type", "")
-    payload = response.json() if "application/json" in content_type else {"raw": response.text}
-    return {
-        "status_code": response.status_code,
-        "endpoint": endpoint,
-        "response": payload,
-    }
+        content_type = response.headers.get("content-type", "")
+        payload = response.json() if "application/json" in content_type else {"raw": response.text}
+
+        return {
+            "status_code": response.status_code,
+            "endpoint": endpoint,
+            "response": payload,
+        }
+
+    except requests.exceptions.RequestException as exc:
+        logger.error("Network error during pipeline call to %s: %s", endpoint, str(exc))
+        raise PipelineError(f"Connection failed to extraction pipeline: {endpoint}") from exc
 
 
 def _dry_run_response(endpoint: str, file_path: Path) -> dict:

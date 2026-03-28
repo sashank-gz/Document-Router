@@ -9,7 +9,6 @@ from __future__ import annotations
 import html as html_mod
 import json
 import logging
-import re
 from pathlib import Path
 from string import Template as StringTemplate
 from urllib.parse import quote
@@ -25,6 +24,11 @@ from .file_service import build_pipeline_url, list_available_outputs
 from .log_handler import JobStatusLogHandler, active_job_context
 from .models import JobRecord, JobStore
 from .router_engine import DocumentRouterEngine
+from .utils import (
+    highlight_json,
+    resolve_processed_file,
+    strip_uuid_prefix,
+)
 
 # Constants
 MAX_PASSWORD_ATTEMPTS = 5
@@ -229,94 +233,17 @@ def health_check() -> dict:
     return {"status": "ok", "service": "document-router-platform", "version": "2.0.0"}
 
 
-# Viewer helpers
-
-
-def _highlight_json(escaped_html: str) -> str:
-    """Apply syntax-coloring to HTML-escaped JSON text."""
-    # Keys (purple)
-    escaped_html = re.sub(
-        r"(&quot;[^&]*?&quot;)\s*:",
-        r'<span style="color:#C084FC">\1</span>:',
-        escaped_html,
-    )
-    # String values (green)
-    escaped_html = re.sub(
-        r":\s*(&quot;[^&]*?&quot;)",
-        r': <span style="color:#6EE7B7">\1</span>',
-        escaped_html,
-    )
-    # Numbers (orange)
-    escaped_html = re.sub(
-        r"(?<=: )(-?\d+\.?\d*)",
-        r'<span style="color:#FDBA74">\1</span>',
-        escaped_html,
-    )
-    # Booleans / null (blue)
-    escaped_html = re.sub(
-        r"(?<=: )(true|false|null)",
-        r'<span style="color:#93C5FD">\1</span>',
-        escaped_html,
-    )
-    return escaped_html
-
-
-def _strip_uuid_prefix(filename: str) -> str:
-    """Remove the 32-hex-char UUID prefix from a filename, if present."""
-    m = re.match(r"^[0-9a-f]{32}_(.+)$", filename, re.IGNORECASE)
-    return m.group(1) if m else filename
-
-
-SAFE_PROCESSED_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._()\- ]*$")
-ALLOWED_PROCESSED_EXTENSIONS = {".pdf", ".md", ".json", ".html"}
-
-
-def _sanitize_processed_filename(filename: str) -> str:
-    """Validate and sanitize a processed filename coming from a route parameter."""
-    raw = filename or ""
-    candidate = Path(raw).name
-
-    if not raw or candidate in {"", ".", ".."}:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    if "/" in raw or "\\" in raw or ".." in candidate:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    if not SAFE_PROCESSED_FILENAME_RE.fullmatch(candidate):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    if Path(candidate).suffix.lower() not in ALLOWED_PROCESSED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Unsupported file type")
-
-    return candidate
-
-
-def _resolve_processed_file(filename: str) -> Path:
-    """Safely resolve a processed file path within the processed directory."""
-    safe_name = _sanitize_processed_filename(filename)
-    processed_root = PROCESSED_DIR.resolve()
-    file_path = (processed_root / safe_name).resolve()
-
-    if processed_root not in file_path.parents:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return file_path
-
-
 @app.get("/processed/{filename}")
 def download_processed_file(filename: str) -> FileResponse:
     """Serve a processed output file using strict filename validation."""
-    file_path = _resolve_processed_file(filename)
+    file_path = resolve_processed_file(PROCESSED_DIR, filename)
     return FileResponse(file_path, filename=file_path.name)
 
 
 @app.get("/view/{filename}")
 def view_processed_file(filename: str):
     """Serve a processed file (MD/JSON/HTML) wrapped in a styled viewer page."""
-    file_path = _resolve_processed_file(filename)
+    file_path = resolve_processed_file(PROCESSED_DIR, filename)
     safe_filename = file_path.name
 
     content = file_path.read_text(encoding="utf-8", errors="replace")
@@ -330,9 +257,9 @@ def view_processed_file(filename: str):
 
     escaped = html_mod.escape(content)
     if is_json:
-        escaped = _highlight_json(escaped)
+        escaped = highlight_json(escaped)
 
-    display_name = _strip_uuid_prefix(safe_filename)
+    display_name = strip_uuid_prefix(safe_filename)
 
     tpl_path = TEMPLATES_DIR / "viewer.html"
     tpl = StringTemplate(tpl_path.read_text(encoding="utf-8"))

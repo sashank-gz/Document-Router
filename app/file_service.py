@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
+from urllib.parse import quote_plus
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -38,8 +39,9 @@ def build_pipeline_url(pipeline: Pipeline, file_name: str | None = None) -> str 
         return None
 
     if file_name:
+        encoded_file = quote_plus(file_name)
         sep = "&" if "?" in url else "?"
-        url = f"{url}{sep}file={file_name}"
+        url = f"{url}{sep}file={encoded_file}"
     return url
 
 

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${display_name}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -46,8 +47,8 @@
     <div class="toolbar">
         <span class="toolbar-title">${display_name}</span>
         <div class="toolbar-actions">
-            <a href="javascript:history.back()" class="btn-back">← Back</a>
-            <a href="/processed/${filename}" download class="btn-download">↓ Download</a>
+            <button type="button" class="btn-back" onclick="history.back()">&larr; Back</button>
+            <a href="/processed/${filename}" download class="btn-download">&darr; Download</a>
         </div>
     </div>
     <div class="content">${content}</div>

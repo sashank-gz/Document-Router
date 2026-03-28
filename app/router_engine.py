@@ -1,5 +1,5 @@
 """
-Core routing workflow — orchestrates file save, classification, pipeline
+Core routing workflow - orchestrates file save, classification, pipeline
 dispatch, and job status tracking for each uploaded document.
 """
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentRouterEngine:
-    """Save → Classify → Route → Track for each uploaded PDF."""
+    """Save -> Classify -> Route -> Track for each uploaded PDF."""
 
     def __init__(self, job_store: JobStore, uploads_dir: Path, processed_dir: Path) -> None:
         self.job_store = job_store
@@ -74,7 +74,7 @@ class DocumentRouterEngine:
             import json
 
             # Step 1: Analyze PDF (normalize, detect traits, check encryption)
-            encrypted_result = self._analyze_pdf(
+            saved_path, encrypted_result = self._analyze_pdf(
                 job_id, saved_path, debug_info, is_fresh=(initial_debug_info is None)
             )
             if encrypted_result:
@@ -134,7 +134,7 @@ class DocumentRouterEngine:
                 classification,
             )
 
-    # ── Sub-steps ────────────────────────────────────────────────
+    # Sub-steps
 
     def _analyze_pdf(
         self,
@@ -143,17 +143,17 @@ class DocumentRouterEngine:
         debug_info: dict,
         *,
         is_fresh: bool,
-    ) -> dict | None:
+    ) -> tuple[Path, dict | None]:
         """Normalize PDF, detect traits, check encryption.
 
-        Returns a dict (early response) if the file is encrypted, else None.
+        Returns (possibly normalized path, early response).
         """
         import json
 
         from .pdf_utils import analyze_pdf, normalize_pdf
 
         if not is_fresh:
-            return None
+            return saved_path, None
 
         saved_path = normalize_pdf(saved_path)
 
@@ -167,7 +167,7 @@ class DocumentRouterEngine:
                         {"password_attempts": 0, "pdf_traits": pdf_info.get("traits", [])}
                     ),
                 )
-                return {
+                return saved_path, {
                     "job_id": job_id,
                     "file_name": saved_path.name,
                     "status": "REQUIRES_PASSWORD",
@@ -178,7 +178,7 @@ class DocumentRouterEngine:
         else:
             debug_info["pdf_traits"] = []
 
-        return None
+        return saved_path, None
 
     def _classify(self, saved_path: Path, debug_info: dict) -> tuple:
         """Extract text and run the 3-tier classifier. Returns (classification, debug_info)."""

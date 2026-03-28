@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from contextvars import ContextVar
 
 active_job_context: ContextVar[int | None] = ContextVar("active_job", default=None)
@@ -21,10 +22,11 @@ class JobStatusLogHandler(logging.Handler):
     def __init__(self, job_store):
         super().__init__()
         self.job_store = job_store
+        self.logger = logging.getLogger(__name__)
 
     def emit(self, record):
         job_id = active_job_context.get()
-        if not job_id:
+        if job_id is None:
             return
 
         if record.levelno < logging.INFO:
@@ -56,7 +58,15 @@ class JobStatusLogHandler(logging.Handler):
         if msg in ("COMPLETED", "FAILED", "REQUIRES_PASSWORD"):
             return
 
-        job = self.job_store.get_job(job_id)
+        try:
+            job = self.job_store.get_job(job_id)
+        except Exception as e:
+            if self.logger:
+                self.logger.error("get_job failed for %s: %s", job_id, e)
+            else:
+                print(f"get_job failed for {job_id}: {e}", file=sys.stderr)
+            return
+
         if not job:
             return
 
@@ -66,6 +76,10 @@ class JobStatusLogHandler(logging.Handler):
         debug_info["logs"] = logs
 
         try:
-            self.job_store.update_job(job_id, debug_info=json.dumps(debug_info))
-        except Exception:
-            pass
+            payload = json.dumps(debug_info)
+            self.job_store.update_job(job_id, debug_info=payload)
+        except Exception as e:
+            if self.logger:
+                self.logger.error("update_job failed for %s: %s", job_id, e)
+            else:
+                print(f"update_job failed for {job_id}: {e}", file=sys.stderr)

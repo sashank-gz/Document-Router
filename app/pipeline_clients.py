@@ -1,4 +1,4 @@
-﻿"""
+"""
 HTTP clients for downstream OCR and LLM extraction pipelines.
 
 Endpoints and timeouts are loaded from app.config so they can be
@@ -21,6 +21,14 @@ class PipelineError(Exception):
     """Raised when a pipeline call fails."""
 
 
+def _safe_body_preview(body: str, limit: int = 200) -> str:
+    """Return a compact, truncated response snippet for safe error logs."""
+    compact = " ".join((body or "").split())
+    if len(compact) > limit:
+        return compact[:limit] + "..."
+    return compact
+
+
 def _post_file(endpoint: str, file_path: Path) -> dict:
     """POST a PDF to an extraction service and return the parsed response."""
     with file_path.open("rb") as f:
@@ -29,10 +37,10 @@ def _post_file(endpoint: str, file_path: Path) -> dict:
 
     if response.status_code >= 400:
         logger.error(
-            "Pipeline call failed: endpoint=%s status=%s body=%s",
+            "Pipeline call failed: endpoint=%s status=%s body_preview=%s",
             endpoint,
             response.status_code,
-            response.text,
+            _safe_body_preview(response.text),
         )
         raise PipelineError(f"Pipeline call failed with status {response.status_code}")
 

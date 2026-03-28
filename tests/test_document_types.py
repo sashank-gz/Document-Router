@@ -23,7 +23,8 @@ class TestDocumentTypeLoading:
 
     def test_unknown_type_exists(self):
         """UNKNOWN type should always exist as a fallback."""
-        assert hasattr(DocumentType, "UNKNOWN") or "UNKNOWN" in [dt.value for dt in DocumentType]
+        assert "UNKNOWN" in DocumentType.__members__
+        assert DocumentType["UNKNOWN"] is not None
 
     def test_route_map_covers_all_types(self):
         """Every DocumentType should have a pipeline in ROUTE_MAP."""
@@ -33,7 +34,7 @@ class TestDocumentTypeLoading:
     def test_pipelines_are_valid(self):
         """All mapped pipelines should be valid Pipeline enum members."""
         for dt, pipeline in ROUTE_MAP.items():
-            assert isinstance(pipeline, Pipeline), f"{dt.value} → {pipeline} is not a Pipeline"
+            assert isinstance(pipeline, Pipeline), f"{dt.value} -> {pipeline} is not a Pipeline"
 
     def test_get_pipeline_returns_pipeline(self):
         """get_pipeline should return a Pipeline for any document type."""
@@ -56,7 +57,7 @@ class TestHintsLoading:
     def test_keyword_hints_not_empty(self):
         assert len(KEYWORD_HINTS) > 0, "No keyword hints loaded"
 
-    def test_hints_are_lowercase_lists(self):
+    def test_hints_are_string_lists(self):
         """Each hint file should produce a list of string hints."""
         for type_name, hints in KEYWORD_HINTS.items():
             assert isinstance(hints, list), f"{type_name} hints is not a list"

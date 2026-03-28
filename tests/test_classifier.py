@@ -10,8 +10,6 @@ from app.classifier import (
 )
 from app.document_types import DocumentType, Pipeline
 
-# ── Tier 1: Filename classification ──────────────────────────────────
-
 
 class TestTier1Filename:
     """Tests for _classify_by_filename."""
@@ -45,21 +43,16 @@ class TestTier1Filename:
         assert result.document_type == DocumentType["LOSS_RUN"]
 
 
-# ── Tier 2: Keyword classification ───────────────────────────────────
-
-
 class TestTier2Keywords:
     """Tests for _classify_by_keywords."""
 
     def test_matches_known_keyword(self):
         """Keyword hints should match when present in text."""
-        result = _classify_by_keywords("This is a loss run report with claim number 12345")
-        # Exact match depends on config/keyword_hints content.
-        # At minimum, the function should return a result or None.
-        # If keyword hints for LOSS_RUN contain "loss run" or "claim number"
-        # this should match.
-        if result:
-            assert result.tier == "keyword"
+        with patch.dict("app.classifier.KEYWORD_HINTS", {"LOSS_RUN": ["loss run"]}, clear=True):
+            result = _classify_by_keywords("This is a loss run report with claim number 12345")
+
+        assert result is not None
+        assert result.tier == "keyword"
 
     def test_no_match_returns_none(self):
         result = _classify_by_keywords("Buy milk and eggs from the store")
@@ -75,14 +68,15 @@ class TestTier2Keywords:
 
     def test_normalizes_whitespace(self):
         """Multi-line text should be collapsed for matching."""
-        result = _classify_by_keywords("loss\n   run\n  report")
-        # The function joins on whitespace, so "loss run report" should match
-        # if "loss run" is in keyword hints.
-        if result:
-            assert result.tier == "keyword"
+        with patch.dict(
+            "app.classifier.KEYWORD_HINTS",
+            {"LOSS_RUN": ["loss run"]},
+            clear=True,
+        ):
+            result = _classify_by_keywords("loss\n   run\n  report")
 
-
-# ── Orchestrator: classify_document ──────────────────────────────────
+        assert result is not None
+        assert result.tier == "keyword"
 
 
 class TestClassifyDocument:
@@ -119,8 +113,8 @@ class TestClassifyDocument:
                 result, debug = classify_document("loss_run.pdf", "loss run report")
                 assert result.tier == "both"
 
-    def test_tier1_and_tier2_conflict_triggers_tier3(self):
-        """When tiers disagree, Tier 3 should be attempted."""
+    def test_tier1_and_tier2_conflict_falls_to_unknown_without_llm(self):
+        """When Tier 1 and Tier 2 disagree and no LLM text is available, classifier should fall back to UNKNOWN."""
         with patch("app.classifier._classify_by_filename") as mock_fn:
             mock_fn.return_value = ClassificationResult(
                 document_type=DocumentType["LOSS_RUN"],
@@ -133,7 +127,7 @@ class TestClassifyDocument:
                     pipeline=Pipeline.OCR,
                     tier="keyword",
                 )
-                # No LLM text provided → should fall through to MANUAL
+                # No LLM text provided -> should fall through to UNKNOWN (tier 'none')
                 result, debug = classify_document("loss_run.pdf", "acord form")
                 assert result.document_type == DocumentType["UNKNOWN"]
                 assert result.tier == "none"
@@ -156,6 +150,6 @@ class TestClassifyDocument:
                 tier="filename",
             )
             with patch("app.classifier._classify_by_keywords", return_value=None):
-                # No LLM text → should fall to MANUAL
+                # No LLM text -> should fall to MANUAL
                 result, debug = classify_document("loss_run.pdf", "")
                 assert result.document_type == DocumentType["UNKNOWN"]

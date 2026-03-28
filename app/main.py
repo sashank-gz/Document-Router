@@ -316,8 +316,8 @@ def download_processed_file(filename: str) -> FileResponse:
 @app.get("/view/{filename}")
 def view_processed_file(filename: str):
     """Serve a processed file (MD/JSON/HTML) wrapped in a styled viewer page."""
-    safe_filename = _sanitize_processed_filename(filename)
-    file_path = _resolve_processed_file(safe_filename)
+    file_path = _resolve_processed_file(filename)
+    safe_filename = file_path.name
 
     content = file_path.read_text(encoding="utf-8", errors="replace")
 

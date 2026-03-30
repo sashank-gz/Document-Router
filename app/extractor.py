@@ -75,15 +75,45 @@ class AdvancedDoclingExtractor:
 
     def extract(self, source: Path | str) -> str:
         """Runs the intensive Docling pipeline safely and emits Markdown."""
+        from .extraction_handlers import extract_content
+        from .file_utils import get_file_category
+
+        source = Path(source)
+        category = get_file_category(source)
+
         try:
-            doc = self.doc_converter.convert(str(source)).document
-            md_text = doc.export_to_markdown()
-            _save_exports(doc, Path(source))
-            return md_text
+            # Step 1: Execute extraction via handler strategy
+            result = extract_content(source, category)
+
+            # Step 2: Save exports (consistent output)
+            self._persist_result(result, source)
+
+            # Return Markdown as the primary interface
+            return result.markdown
         except Exception as exc:
-            source_name = Path(source).name if isinstance(source, Path | str) else str(source)
-            logger.exception("Unable to extract text natively from file: %s", source)
+            source_name = source.name
+            logger.exception("Unified extraction failed for file: %s", source)
             raise RuntimeError(f"Failed to read document natively: {source_name}") from exc
+
+    def _persist_result(self, result, source: Path, suffix: str = "") -> None:
+        """Saves the extraction results to the file system based on configuration."""
+        import json
+
+        stem = f"{source.stem}{suffix}"
+        parent = source.parent
+
+        if config.DOCLING_SAVE_MD:
+            (parent / f"{stem}.md").write_text(result.markdown, encoding="utf-8")
+        if config.DOCLING_SAVE_JSON:
+            output_json = result.structured_json or {}
+            (parent / f"{stem}.json").write_text(
+                json.dumps(output_json, indent=2), encoding="utf-8"
+            )
+        # Store raw text for classification audit if needed
+        (parent / f"{stem}.txt").write_text(result.raw_text, encoding="utf-8")
+
+        if config.DOCLING_SAVE_HTML and hasattr(result, "html"):
+            (parent / f"{stem}.html").write_text(result.html, encoding="utf-8")
 
 
 class HandwrittenDoclingExtractor:

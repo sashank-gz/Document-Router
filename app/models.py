@@ -25,6 +25,7 @@ class JobRecord(BaseModel):
     extraction_time: float | None = None
     debug_info: dict | None = None
     available_outputs: list[str] = []
+    parent_job_id: int | None = None
 
 
 class JobStore:
@@ -50,11 +51,19 @@ class JobStore:
                     document_type TEXT,
                     classification_tier TEXT,
                     extraction_time REAL,
-                    debug_info TEXT
+                    debug_info TEXT,
+                    parent_job_id INTEGER
                 )
                 """
             )
             conn.commit()
+
+            # Migration for parent_job_id
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN parent_job_id INTEGER")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
             # Quick migration for existing databases
             try:
@@ -96,11 +105,12 @@ class JobStore:
         document_type: str | None = None,
         classification_tier: str | None = None,
         extraction_time: float | None = None,
+        parent_job_id: int | None = None,
     ) -> int:
         created_at = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO jobs (file_name, route, status, created_at, debug_info, document_type, classification_tier, extraction_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (file_name, route, status, created_at, debug_info, document_type, classification_tier, extraction_time, parent_job_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     file_name,
                     route,
@@ -110,6 +120,7 @@ class JobStore:
                     document_type,
                     classification_tier,
                     extraction_time,
+                    parent_job_id,
                 ),
             )
             conn.commit()
@@ -181,14 +192,14 @@ class JobStore:
     def list_jobs(self) -> list[JobRecord]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, extraction_time, debug_info FROM jobs ORDER BY id DESC"
+                "SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, extraction_time, debug_info, parent_job_id FROM jobs ORDER BY id DESC"
             ).fetchall()
         return [self._parse_row(row) for row in rows]
 
     def get_job(self, job_id: int) -> JobRecord | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, extraction_time, debug_info FROM jobs WHERE id = ?",
+                "SELECT id, file_name, route, status, created_at, pipeline_url, document_type, classification_tier, extraction_time, debug_info, parent_job_id FROM jobs WHERE id = ?",
                 (job_id,),
             ).fetchone()
 

@@ -17,12 +17,12 @@ from .classifier import classify_document
 from .document_types import Pipeline
 from .file_service import (
     build_pipeline_url,
-    extract_classification_text,
-    extract_pages_text,
+    extract_document_raw_text,
     list_available_outputs,
     move_to_processed,
     save_upload_file,
 )
+from .file_utils import FileCategory, get_file_category
 from .models import JobStore
 from .pipeline_clients import PipelineError, send_to_llm_pipeline, send_to_ocr_pipeline
 
@@ -47,6 +47,12 @@ class DocumentRouterEngine:
         )
         return self._process_file(job_id, saved_path)
 
+    def _process_file(
+        self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None, depth: int = 0
+    ) -> dict:
+        """Internal synchronous method to run the classification and pipeline."""
+        return self._process_file_internal(job_id, saved_path, initial_debug_info, depth)
+
     def continue_processing(self, job_id: int) -> dict:
         """Resume processing of a job (e.g. after password unlock)."""
         job = self.job_store.get_job(job_id)
@@ -67,25 +73,32 @@ class DocumentRouterEngine:
             kwargs["debug_info"] = json.dumps(kwargs["debug_info"])
         self.job_store.update_job(job_id, status=status, **kwargs)
 
-    def _process_file(
-        self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None
+    def _process_file_internal(
+        self, job_id: int, saved_path: Path, initial_debug_info: dict | None = None, depth: int = 0
     ) -> dict:
         """Internal synchronous method to run the classification and pipeline."""
+
         start_time = time.time()
         debug_info = initial_debug_info or {}
+        category = get_file_category(saved_path)
+        debug_info["file_category"] = category.value
 
         try:
-            # Step 1: Analyze PDF (normalize, detect traits, check encryption)
-            saved_path, encrypted_result = self._analyze_pdf(
-                job_id, saved_path, debug_info, is_fresh=(initial_debug_info is None)
+            # 1. Pre-processing (Normalization, traits, encryption check)
+            saved_path, pre_proc_res = self._run_pre_processing(
+                job_id, saved_path, debug_info, category, is_fresh=(initial_debug_info is None)
             )
-            if encrypted_result:
-                return encrypted_result
+            if pre_proc_res:
+                return pre_proc_res
 
-            # Step 2: Classify
-            classification, debug_info = self._classify(saved_path, debug_info)
+            # 2. Classification
+            classification, cls_debug_info = self._classify_document_internal(saved_path)
+            debug_info.update(cls_debug_info)
 
-            # Preserve logs from the database
+            # 3. Post-Classification Hooks (e.g. Email attachment recursion)
+            self._handle_post_classification_hooks(job_id, saved_path, category, depth)
+
+            # 4. Finalize job state before routing
             db_job = self.job_store.get_job(job_id)
             if db_job and db_job.debug_info and "logs" in db_job.debug_info:
                 debug_info["logs"] = db_job.debug_info["logs"]
@@ -100,19 +113,18 @@ class DocumentRouterEngine:
             )
 
             logger.info(
-                "Classification: file=%s type=%s pipeline=%s tier=%s confidence=%.2f",
+                "Classification complete: file=%s type=%s pipeline=%s confidence=%.2f",
                 saved_path.name,
                 classification.document_type.value,
                 classification.pipeline.value,
-                classification.tier,
                 classification.confidence,
             )
 
-            # Step 3: Route to pipeline
+            # 5. Route to pipeline
             return self._route(job_id, saved_path, classification, debug_info, start_time)
 
         except (PipelineError, Exception) as exc:
-            elapsed = round(time.time() - start_time, 1) if "start_time" in locals() else None
+            elapsed = round(time.time() - start_time, 1)
             return self._handle_error(
                 job_id,
                 saved_path,
@@ -121,6 +133,33 @@ class DocumentRouterEngine:
                 classification=locals().get("classification"),
                 elapsed=elapsed,
             )
+
+    def _run_pre_processing(
+        self,
+        job_id: int,
+        saved_path: Path,
+        debug_info: dict,
+        category: FileCategory,
+        is_fresh: bool,
+    ) -> tuple[Path, dict | None]:
+        """Normalize file and detect traits if applicable."""
+        if category == FileCategory.PDF:
+            return self._analyze_pdf(job_id, saved_path, debug_info, is_fresh=is_fresh)
+
+        # Non-PDF files skip traits/normalization for now
+        debug_info["pdf_traits"] = []
+        return saved_path, None
+
+    def _classify_document_internal(self, saved_path: Path) -> tuple:
+        """Centralized text extraction and classification logic."""
+        return self._classify(saved_path, {})
+
+    def _handle_post_classification_hooks(
+        self, job_id: int, saved_path: Path, category: FileCategory, depth: int
+    ) -> None:
+        """Trigger side effects like email recursion."""
+        if category == FileCategory.EMAIL and depth < config.EMAIL_MAX_RECURSION_DEPTH:
+            self._handle_email_attachments(job_id, saved_path, depth + 1)
 
     def _handle_error(
         self,
@@ -181,14 +220,14 @@ class DocumentRouterEngine:
 
     def _classify(self, saved_path: Path, debug_info: dict) -> tuple:
         """Extract text and run the 3-tier classifier."""
-        tier_2_text = extract_classification_text(saved_path)
+        # Tier 2 classification now uses normalized raw text
+
+        tier_2_text = extract_document_raw_text(saved_path)
 
         multi_page_text = None
         if config.GROQ_ENABLED or config.GEMINI_ENABLED:
-            multi_page_text = extract_pages_text(
-                saved_path,
-                max_pages=config.CLASSIFICATION_MAX_PAGES,
-            )
+            # For Tier 3, we still use full text (Docling-ready)
+            multi_page_text = tier_2_text
 
         classification, cls_debug_info = classify_document(
             filename=saved_path.name,
@@ -197,6 +236,43 @@ class DocumentRouterEngine:
         )
         debug_info.update(cls_debug_info)
         return classification, debug_info
+
+    def _handle_email_attachments(self, parent_job_id: int, email_path: Path, depth: int) -> None:
+        """Extract and spawn new jobs for email attachments."""
+        from .extraction_handlers import extract_content
+        from .file_utils import is_supported
+
+        try:
+            category = get_file_category(email_path)
+            res = extract_content(email_path, category)
+
+            if not res.attachments:
+                return
+
+            logger.info(
+                "Email cleanup: found %d attachments in job %d", len(res.attachments), parent_job_id
+            )
+
+            for att_path in res.attachments:
+                if not is_supported(att_path):
+                    logger.warning("Skipping unsupported attachment: %s", att_path.name)
+                    continue
+
+                # Create a new job for the attachment
+                child_job_id = self.job_store.create_job(
+                    file_name=att_path.name,
+                    route="UNKNOWN",
+                    status="UPLOADED",
+                    parent_job_id=parent_job_id,
+                )
+
+                logger.info("Spawning child job %d for attachment %s", child_job_id, att_path.name)
+                # Note: We process it synchronously here but it's fine since the whole thing
+                # is already in a BackgroundTask.
+                self._process_file(child_job_id, att_path, depth=depth)
+
+        except Exception:
+            logger.exception("Failed to handle email attachments for job %d", parent_job_id)
 
     def _route(
         self,

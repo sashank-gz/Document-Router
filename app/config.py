@@ -85,3 +85,9 @@ ENABLE_PDF_TRAITS: bool = _setting_bool("ENABLE_PDF_TRAITS", "true")
 DOCLING_SAVE_MD: bool = _setting_bool("DOCLING_SAVE_MD", "true")
 DOCLING_SAVE_JSON: bool = _setting_bool("DOCLING_SAVE_JSON", "false")
 DOCLING_SAVE_HTML: bool = _setting_bool("DOCLING_SAVE_HTML", "false")
+
+# ── Extraction & Email Routing ──────────────────────────────────────
+EXTRACTION_PREVIEW_LIMIT: int = int(_get_setting("EXTRACTION_PREVIEW_LIMIT", "200"))
+DOCLING_DO_OCR: bool = _setting_bool("DOCLING_DO_OCR", "true")
+DOCLING_DO_TABLES: bool = _setting_bool("DOCLING_DO_TABLES", "true")
+EMAIL_MAX_RECURSION_DEPTH: int = int(_get_setting("EMAIL_MAX_RECURSION_DEPTH", "2"))

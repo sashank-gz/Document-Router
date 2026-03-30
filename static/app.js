@@ -92,10 +92,14 @@ let parsingInterval;
 let timerInterval;
 
 async function handleFiles(fileList) {
-    const files = Array.from(fileList).filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+    const supportedExtensions = ['.pdf', '.docx', '.xlsx', '.xls', '.csv', '.json', '.eml', '.msg'];
+    const files = Array.from(fileList).filter(f => {
+        const name = f.name.toLowerCase();
+        return supportedExtensions.some(ext => name.endsWith(ext));
+    });
 
     if (files.length === 0) {
-        showToast("Please select PDF files only", "error");
+        showToast("Unsupported file format. Please select PDF, Word, Excel, CSV, JSON or Email files.", "error");
         return;
     }
 
@@ -470,7 +474,7 @@ function renderJobsPage() {
             <tr tabindex="0" onclick="selectedJobFileName='${escapeHtml(job.file_name)}'; document.querySelectorAll('.jobs-table tbody tr').forEach(r=>r.style.outline=''); this.style.outline='2px solid var(--accent)'" style="cursor:pointer;">
                 <td>${job.id}</td>
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
-                    <a href="#" onclick="event.preventDefault(); openPdfPreview('${escapeHtml(job.file_name)}')" style="color:var(--accent); text-decoration:none; font-weight:500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                    <a href="#" onclick="event.preventDefault(); openDocPreview('${escapeHtml(job.file_name)}')" style="color:var(--accent); text-decoration:none; font-weight:500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
                         ${escapeHtml(getOriginalName(job.file_name))}
                     </a>
                 </td>
@@ -585,13 +589,13 @@ function getOriginalName(fileName) {
     return match ? match[1] : fileName;
 }
 
-// ── PDF Preview Modal ─────────────────────────────────────────
+// ── Document Preview Modal ─────────────────────────────────────────
 let currentPreviewFileName = null;
 
-function openPdfPreview(storedFileName) {
-    const modal = document.getElementById("pdf-preview-modal");
-    const iframe = document.getElementById("pdf-preview-iframe");
-    const title = document.getElementById("pdf-preview-title");
+function openDocPreview(storedFileName) {
+    const modal = document.getElementById("doc-preview-modal");
+    const iframe = document.getElementById("doc-preview-iframe");
+    const title = document.getElementById("doc-preview-title");
     if (!modal || !iframe) return;
     iframe.src = `/processed/${encodeURIComponent(storedFileName)}`;
     title.textContent = getOriginalName(storedFileName);
@@ -599,9 +603,9 @@ function openPdfPreview(storedFileName) {
     modal.showModal();
 }
 
-function closePdfPreview() {
-    const modal = document.getElementById("pdf-preview-modal");
-    const iframe = document.getElementById("pdf-preview-iframe");
+function closeDocPreview() {
+    const modal = document.getElementById("doc-preview-modal");
+    const iframe = document.getElementById("doc-preview-iframe");
     if (modal) modal.close();
     if (iframe) iframe.src = "";
     currentPreviewFileName = null;
@@ -612,10 +616,10 @@ let selectedJobFileName = null;
 document.addEventListener("keydown", (e) => {
     if (e.key === " " && selectedJobFileName && !document.querySelector("dialog[open]")) {
         e.preventDefault();
-        openPdfPreview(selectedJobFileName);
+        openDocPreview(selectedJobFileName);
     }
     if (e.key === "Escape" && currentPreviewFileName) {
-        closePdfPreview();
+        closeDocPreview();
     }
 });
 

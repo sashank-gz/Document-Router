@@ -8,3 +8,7 @@ python-dotenv
 groq
 google-generativeai
 pymupdf
+extract-msg
+pandas
+tabulate
+openpyxl

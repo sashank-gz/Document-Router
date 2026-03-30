@@ -188,6 +188,7 @@ class JobStore:
             try:
                 row = conn.execute("SELECT debug_info FROM jobs WHERE id = ?", (job_id,)).fetchone()
                 if not row:
+                    conn.rollback()
                     return
 
                 debug_info_raw = row["debug_info"]

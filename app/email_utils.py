@@ -129,8 +129,16 @@ def parse_msg(file_path: Path, output_dir: Path) -> tuple[dict[str, Any], list[P
                     logger.warning("Attachment %s in %s has no data", safe_name, file_path.name)
             except Exception as e:
                 logger.error("Failed to save attachment %s: %s", safe_name, e)
-                if candidate_path.exists():
-                    candidate_path.unlink()
+                try:
+                    if candidate_path.exists():
+                        candidate_path.unlink()
+                except Exception as cleanup_err:
+                    logger.warning(
+                        "Failed to clean up failed attachment %s at %s: %s",
+                        safe_name,
+                        candidate_path,
+                        cleanup_err,
+                    )
 
         return _build_email_metadata(subject, sender, body), attachments
     finally:

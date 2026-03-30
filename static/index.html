@@ -57,8 +57,10 @@
                     </svg>
                 </div>
                 <p class="upload-text">Drag & drop your documents here</p>
-                <p class="upload-hint">or click to browse • Supports PDF, Word, Excel, CSV, JSON, Email</p>
-                <input type="file" id="file-input" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.json,.eml,.msg" hidden>
+                <p class="upload-hint">or click to browse • Supports PDF, Word, Excel, CSV, JSON, Email, Images, ZIP</p>
+                <input type="file" id="file-input" multiple
+                    accept=".pdf,.docx,.xlsx,.xls,.xlsm,.csv,.json,.eml,.msg,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.zip"
+                    hidden>
                 <button class="btn btn-primary" id="browse-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -171,8 +173,8 @@
                 This document is protected. Please enter the password to continue processing.
             </div>
             <input type="hidden" id="unlock-job-id" value="">
-            <input type="password" id="unlock-password" class="modal-input" placeholder="Enter document password..." required
-                autofocus>
+            <input type="password" id="unlock-password" class="modal-input" placeholder="Enter document password..."
+                required autofocus>
             <div class="modal-actions">
                 <button type="button" class="btn btn-ghost" id="cancel-unlock-btn">Cancel</button>
                 <button type="submit" class="btn btn-primary" id="submit-unlock-btn"
@@ -188,11 +190,16 @@
         box-shadow: 0 25px 60px rgba(0,0,0,0.3);
         background: #fff;
     ">
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid #E5E7EB;">
-            <span id="doc-preview-title" style="font-weight:600; font-size:0.95rem; color:#1A1D26; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;"></span>
-            <button onclick="closeDocPreview()" style="background:none; border:none; cursor:pointer; font-size:1.4rem; color:#9CA3B0; line-height:1;" title="Close">&times;</button>
+        <div
+            style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid #E5E7EB;">
+            <span id="doc-preview-title"
+                style="font-weight:600; font-size:0.95rem; color:#1A1D26; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;"></span>
+            <button onclick="closeDocPreview()"
+                style="background:none; border:none; cursor:pointer; font-size:1.4rem; color:#9CA3B0; line-height:1;"
+                title="Close">&times;</button>
         </div>
-        <iframe id="doc-preview-iframe" style="width:100%; height:calc(100% - 50px); border:none; border-radius:0 0 14px 14px;"></iframe>
+        <iframe id="doc-preview-iframe"
+            style="width:100%; height:calc(100% - 50px); border:none; border-radius:0 0 14px 14px;"></iframe>
     </dialog>
 
     <script src="/static/app.js?v=14"></script>

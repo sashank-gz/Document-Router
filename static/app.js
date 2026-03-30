@@ -6,6 +6,14 @@
 
 const API_BASE = "";  // same origin
 
+// ── Configuration ─────────────────────────────────────────────
+const SUPPORTED_EXTENSIONS = [
+    '.pdf', '.doc', '.docx', '.xlsx', '.xls', '.xlsm',
+    '.csv', '.json', '.eml', '.msg',
+    '.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.webp',
+    '.zip'
+];
+
 // ── DOM refs ──────────────────────────────────────────────────
 const uploadZone = document.getElementById("upload-zone");
 const fileInput = document.getElementById("file-input");
@@ -92,14 +100,13 @@ let parsingInterval;
 let timerInterval;
 
 async function handleFiles(fileList) {
-    const supportedExtensions = ['.pdf', '.docx', '.xlsx', '.xls', '.csv', '.json', '.eml', '.msg'];
     const files = Array.from(fileList).filter(f => {
         const name = f.name.toLowerCase();
-        return supportedExtensions.some(ext => name.endsWith(ext));
+        return SUPPORTED_EXTENSIONS.some(ext => name.endsWith(ext));
     });
 
     if (files.length === 0) {
-        showToast("Unsupported file format. Please select PDF, Word, Excel, CSV, JSON or Email files.", "error");
+        showToast("Unsupported file format. Please upload PDF, Word, Excel, CSV, JSON, Email, Images, or ZIP archives.", "error");
         return;
     }
 

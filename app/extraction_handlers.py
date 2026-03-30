@@ -40,7 +40,7 @@ class BaseHandler(ABC):
 
 
 class DoclingHandler(BaseHandler):
-    """Handler for formats supported by Docling (PDF, DOCX, XLSX)."""
+    """Handler for formats supported by Docling (PDF, DOCX, XLSX, IMAGE)."""
 
     def __init__(self, input_format: InputFormat):
         self.input_format = input_format
@@ -49,9 +49,19 @@ class DoclingHandler(BaseHandler):
         pipeline_options.do_ocr = config.DOCLING_DO_OCR
         pipeline_options.do_table_structure = config.DOCLING_DO_TABLES
 
-        self.converter = DocumentConverter(
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-        )
+        # Docling uses specific format options per input format.
+        # Most documents (PDF, Image) use PdfFormatOption which wraps the OCR pipeline.
+        format_options = {}
+        if self.input_format == InputFormat.PDF:
+            format_options[InputFormat.PDF] = PdfFormatOption(pipeline_options=pipeline_options)
+        elif self.input_format == InputFormat.IMAGE:
+            # Docling handles images via the same PDF pipeline logic (OCR + Layout)
+            format_options[InputFormat.IMAGE] = PdfFormatOption(pipeline_options=pipeline_options)
+        else:
+            # For DOCX and others, we let Docling use its defaults or generic options
+            pass
+
+        self.converter = DocumentConverter(format_options=format_options)
 
     def handle(self, file_path: Path) -> ExtractionResult:
         try:
@@ -72,6 +82,30 @@ class DoclingHandler(BaseHandler):
             raise RuntimeError(f"Failed to extract text from {file_path.name}: {str(e)}") from e
 
 
+class ImageHandler(DoclingHandler):
+    """Specialized handler for images utilizing Docling OCR."""
+
+    def __init__(self):
+        super().__init__(InputFormat.IMAGE)
+
+
+class ZipHandler(BaseHandler):
+    """Handler for ZIP files - extracts contents for child job processing."""
+
+    def handle(self, file_path: Path) -> ExtractionResult:
+        from .archive_utils import extract_zip_to_directory
+
+        # Extract to a subfolder in the same directory as the zip (usually uploads/)
+        attachments = extract_zip_to_directory(file_path, file_path.parent)
+
+        return ExtractionResult(
+            raw_text=f"Archive: {file_path.name}\nContains {len(attachments)} files.",
+            markdown=f"# Archive: {file_path.name}\n\nExtracted {len(attachments)} files for processing.",
+            structured_json={"file_count": len(attachments)},
+            attachments=attachments,
+        )
+
+
 class ExcelHandler(BaseHandler):
     """Specialized handler for Excel to meet sheet-naming and row-limit requirements."""
 
@@ -82,7 +116,8 @@ class ExcelHandler(BaseHandler):
         import pandas as pd
 
         try:
-            all_sheets = pd.read_excel(file_path, sheet_name=None)
+            # engine='openpyxl' supports both .xlsx and .xlsm
+            all_sheets = pd.read_excel(file_path, sheet_name=None, engine="openpyxl")
             full_markdown = []
             classification_text = []
 
@@ -211,9 +246,11 @@ class ExtractionRegistry:
         self._handlers: dict[FileCategory, BaseHandler] = {
             FileCategory.PDF: DoclingHandler(InputFormat.PDF),
             FileCategory.DOCUMENT: DoclingHandler(InputFormat.DOCX),
-            FileCategory.SPREADSHEET: ExcelHandler(),  # Using custom excel handler
-            FileCategory.DATA: CSVHandler(),  # Default to CSV, JSON handled by switch or registry
+            FileCategory.SPREADSHEET: ExcelHandler(),
+            FileCategory.DATA: CSVHandler(),
             FileCategory.EMAIL: EmailHandler(),
+            FileCategory.IMAGE: ImageHandler(),
+            FileCategory.ARCHIVE: ZipHandler(),
         }
 
     def get_handler(self, category: FileCategory, file_path: Path) -> BaseHandler:

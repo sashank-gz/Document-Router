@@ -244,59 +244,98 @@ class DocumentRouterEngine:
         debug_info.update(cls_debug_info)
         return classification, debug_info
 
+    def _handle_post_classification_hooks(
+        self, job_id: int, saved_path: Path, category: FileCategory, depth: int
+    ) -> None:
+        """Trigger side effects like email recursion or archive expansion."""
+        if depth >= config.EMAIL_MAX_RECURSION_DEPTH:
+            return
+
+        if category == FileCategory.EMAIL:
+            self._handle_email_attachments(job_id, saved_path, depth + 1)
+        elif category == FileCategory.ARCHIVE:
+            self._handle_archive_extraction(job_id, saved_path, depth + 1)
+
+    def _spawn_child_jobs(self, parent_job_id: int, file_paths: list[Path], depth: int) -> None:
+        """Generic logic to create and process child jobs for attachments or extracted files."""
+        from .file_utils import is_supported
+
+        if not file_paths:
+            return
+
+        logger.info(
+            "Spawning %d child jobs for parent job %d (depth %d)",
+            len(file_paths),
+            parent_job_id,
+            depth,
+        )
+
+        for att_path in file_paths:
+            if not is_supported(att_path):
+                logger.warning("Skipping unsupported file: %s", att_path.name)
+                continue
+
+            # Create a new job for the child file
+            child_job_id = self.job_store.create_job(
+                file_name=att_path.name,
+                route="UNKNOWN",
+                status="UPLOADED",
+                parent_job_id=parent_job_id,
+            )
+
+            logger.info("Spawning child job %d for file %s", child_job_id, att_path.name)
+            # Process synchronously as we are already in a BackgroundTask context
+            self._process_file(child_job_id, att_path, depth=depth)
+
     def _handle_email_attachments(self, parent_job_id: int, email_path: Path, depth: int) -> None:
         """Extract and spawn new jobs for email attachments."""
         from .extraction_handlers import extract_content
-        from .file_utils import is_supported
 
         try:
             category = get_file_category(email_path)
             res = extract_content(email_path, category)
 
-            if not res.attachments:
-                return
-
-            logger.info(
-                "Email cleanup: found %d attachments in job %d", len(res.attachments), parent_job_id
-            )
-
-            for att_path in res.attachments:
-                if not is_supported(att_path):
-                    logger.warning("Skipping unsupported attachment: %s", att_path.name)
-                    continue
-
-                # Create a new job for the attachment
-                child_job_id = self.job_store.create_job(
-                    file_name=att_path.name,
-                    route="UNKNOWN",
-                    status="UPLOADED",
-                    parent_job_id=parent_job_id,
-                )
-
-                logger.info("Spawning child job %d for attachment %s", child_job_id, att_path.name)
-                # Note: We process it synchronously here but it's fine since the whole thing
-                # is already in a BackgroundTask.
-                self._process_file(child_job_id, att_path, depth=depth)
+            if res.attachments:
+                self._spawn_child_jobs(parent_job_id, res.attachments, depth)
 
         except Exception as exc:
             logger.exception(
                 "Failed to handle email attachments for job %d: %s", parent_job_id, exc
             )
-            try:
-                parent_job = self.job_store.get_job(parent_job_id)
-                debug_info = parent_job.debug_info if parent_job and parent_job.debug_info else {}
-                if isinstance(debug_info, str):
-                    try:
-                        debug_info = json.loads(debug_info)
-                    except json.JSONDecodeError:
-                        debug_info = {}
-                if isinstance(debug_info, dict):
-                    debug_info["attachment_error"] = str(exc)
-                    self.job_store.update_job(parent_job_id, debug_info=json.dumps(debug_info))
-            except Exception as log_exc:
-                logger.error(
-                    "Failed to record attachment error for job %d: %s", parent_job_id, log_exc
-                )
+            self._record_hook_error(parent_job_id, "attachment_error", exc)
+
+    def _handle_archive_extraction(
+        self, parent_job_id: int, archive_path: Path, depth: int
+    ) -> None:
+        """Extract and spawn new jobs for ZIP contents."""
+        from .extraction_handlers import extract_content
+
+        try:
+            category = get_file_category(archive_path)
+            res = extract_content(archive_path, category)
+
+            if res.attachments:
+                self._spawn_child_jobs(parent_job_id, res.attachments, depth)
+
+        except Exception as exc:
+            logger.exception("Failed to extract archive for job %d: %s", parent_job_id, exc)
+            self._record_hook_error(parent_job_id, "archive_error", exc)
+
+    def _record_hook_error(self, job_id: int, field_name: str, error: Exception) -> None:
+        """Safely record a hook error into the job's debug_info."""
+        try:
+            job = self.job_store.get_job(job_id)
+            debug_info = job.debug_info if job and job.debug_info else {}
+            if isinstance(debug_info, str):
+                try:
+                    debug_info = json.loads(debug_info)
+                except json.JSONDecodeError:
+                    debug_info = {}
+            if isinstance(debug_info, dict):
+                debug_info[field_name] = str(error)
+                self.job_store.update_job(job_id, debug_info=json.dumps(debug_info))
+        except Exception as log_exc:
+            logger.error("Failed to record hook error for job %d: %s", job_id, log_exc)
 
     def _route(
         self,

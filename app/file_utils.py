@@ -12,6 +12,8 @@ class FileCategory(str, Enum):
     SPREADSHEET = "SPREADSHEET"  # Excel, etc.
     DATA = "DATA"  # CSV, JSON
     EMAIL = "EMAIL"  # EML, MSG
+    IMAGE = "IMAGE"  # PNG, JPG, etc.
+    ARCHIVE = "ARCHIVE"  # ZIP
     UNSUPPORTED = "UNSUPPORTED"
 
 
@@ -23,10 +25,18 @@ CATEGORY_MAPPING = {
     ".docx": FileCategory.DOCUMENT,
     ".xlsx": FileCategory.SPREADSHEET,
     ".xls": FileCategory.SPREADSHEET,
+    ".xlsm": FileCategory.SPREADSHEET,
     ".csv": FileCategory.DATA,
     ".json": FileCategory.DATA,
     ".eml": FileCategory.EMAIL,
     ".msg": FileCategory.EMAIL,
+    ".png": FileCategory.IMAGE,
+    ".jpg": FileCategory.IMAGE,
+    ".jpeg": FileCategory.IMAGE,
+    ".tiff": FileCategory.IMAGE,
+    ".bmp": FileCategory.IMAGE,
+    ".webp": FileCategory.IMAGE,
+    ".zip": FileCategory.ARCHIVE,
 }
 
 

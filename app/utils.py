@@ -55,7 +55,7 @@ def sanitize_processed_filename(filename: str) -> str:
     if not raw or candidate in {"", ".", ".."}:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    if "/" in raw or "\\" in raw or ".." in candidate:
+    if "/" in raw or "\\" in raw:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     if not SAFE_PROCESSED_FILENAME_RE.fullmatch(candidate):

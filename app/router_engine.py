@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentRouterEngine:
-    """Save -> Classify -> Route -> Track for each uploaded PDF."""
+    """Save -> Classify -> Route -> Track for each uploaded file (PDF, EMAIL, etc.)."""
 
     def __init__(self, job_store: JobStore, uploads_dir: Path, processed_dir: Path) -> None:
         self.job_store = job_store
@@ -100,8 +100,15 @@ class DocumentRouterEngine:
 
             # 4. Finalize job state before routing
             db_job = self.job_store.get_job(job_id)
-            if db_job and db_job.debug_info and "logs" in db_job.debug_info:
-                debug_info["logs"] = db_job.debug_info["logs"]
+            if db_job and db_job.debug_info:
+                db_debug = db_job.debug_info
+                if isinstance(db_debug, str):
+                    try:
+                        db_debug = json.loads(db_debug)
+                    except json.JSONDecodeError:
+                        db_debug = {}
+                if isinstance(db_debug, dict) and "logs" in db_debug:
+                    debug_info["logs"] = db_debug["logs"]
 
             self._update_job_status(
                 job_id,
@@ -271,8 +278,25 @@ class DocumentRouterEngine:
                 # is already in a BackgroundTask.
                 self._process_file(child_job_id, att_path, depth=depth)
 
-        except Exception:
-            logger.exception("Failed to handle email attachments for job %d", parent_job_id)
+        except Exception as exc:
+            logger.exception(
+                "Failed to handle email attachments for job %d: %s", parent_job_id, exc
+            )
+            try:
+                parent_job = self.job_store.get_job(parent_job_id)
+                debug_info = parent_job.debug_info if parent_job and parent_job.debug_info else {}
+                if isinstance(debug_info, str):
+                    try:
+                        debug_info = json.loads(debug_info)
+                    except json.JSONDecodeError:
+                        debug_info = {}
+                if isinstance(debug_info, dict):
+                    debug_info["attachment_error"] = str(exc)
+                    self.job_store.update_job(parent_job_id, debug_info=json.dumps(debug_info))
+            except Exception as log_exc:
+                logger.error(
+                    "Failed to record attachment error for job %d: %s", parent_job_id, log_exc
+                )
 
     def _route(
         self,

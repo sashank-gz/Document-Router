@@ -19,6 +19,7 @@ class FileCategory(str, Enum):
 # This is the single source of truth for file support
 CATEGORY_MAPPING = {
     ".pdf": FileCategory.PDF,
+    ".doc": FileCategory.DOCUMENT,
     ".docx": FileCategory.DOCUMENT,
     ".xlsx": FileCategory.SPREADSHEET,
     ".xls": FileCategory.SPREADSHEET,

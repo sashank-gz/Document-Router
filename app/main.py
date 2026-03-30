@@ -260,13 +260,16 @@ def view_processed_file(filename: str):
         escaped = highlight_json(escaped)
 
     display_name = strip_uuid_prefix(safe_filename)
+    display_name_html = html_mod.escape(display_name)
+    filename_encoded = quote(safe_filename, safe="")
+    filename_html = html_mod.escape(filename_encoded)
 
     tpl_path = TEMPLATES_DIR / "viewer.html"
     tpl = StringTemplate(tpl_path.read_text(encoding="utf-8"))
     viewer_html = tpl.safe_substitute(
-        display_name=html_mod.escape(display_name),
-        filename=quote(safe_filename, safe=""),
-        content=escaped,
+        display_name_html=display_name_html,
+        filename_html=filename_html,
+        content_html=escaped,
     )
     return HTMLResponse(content=viewer_html)
 

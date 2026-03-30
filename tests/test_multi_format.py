@@ -68,7 +68,7 @@ def test_email_handler_eml(mock_parse):
     )
 
     handler = EmailHandler()
-    result = handler._handle_eml(Path("test.eml"))
+    result = handler.handle(Path("test.eml"))
 
     assert "Test" in result.markdown
     assert "Hello" in result.raw_text
@@ -97,7 +97,7 @@ def test_email_attachment_recursion(mock_process, mock_extract, tmp_path):
     job_store.create_job.return_value = 101
 
     # Execute
-    engine._handle_email_attachments(100, Path("test.eml"), depth=0)
+    engine._handle_email_attachments(100, Path("test.eml"), depth=1)
 
     # Verify
     job_store.create_job.assert_called_once()
@@ -109,4 +109,4 @@ def test_email_attachment_recursion(mock_process, mock_extract, tmp_path):
     mock_process.assert_called_once()
     p_args, p_kwargs = mock_process.call_args
     assert p_args[0] == 101
-    assert p_kwargs["depth"] == 0
+    assert p_kwargs["depth"] == 1

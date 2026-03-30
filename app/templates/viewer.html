@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${display_name}</title>
+    <title>${display_name_html}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -28,14 +28,21 @@
             padding: 6px 14px; border-radius: 6px; font-size: 0.78rem;
             text-decoration: none; font-weight: 500; cursor: pointer; border: none;
         }
+        .toolbar-actions a:focus-visible, .toolbar-actions button:focus-visible {
+            outline: 2px solid #A5B4FC;
+            outline-offset: 3px;
+            box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.25);
+        }
         .btn-back {
             background: #2D3348; color: #E2E8F0;
         }
         .btn-back:hover { background: #3D4460; }
+        .btn-back:focus-visible { background: #3D4460; }
         .btn-download {
             background: #4F46E5; color: white; margin-left: 8px;
         }
         .btn-download:hover { background: #4338CA; }
+        .btn-download:focus-visible { background: #4338CA; }
         .content {
             padding: 20px 24px;
             overflow-x: auto;
@@ -45,12 +52,12 @@
 </head>
 <body>
     <div class="toolbar">
-        <span class="toolbar-title">${display_name}</span>
+        <span class="toolbar-title">${display_name_html}</span>
         <div class="toolbar-actions">
             <button type="button" class="btn-back" onclick="history.back()">&larr; Back</button>
-            <a href="/processed/${filename}" download class="btn-download">&darr; Download</a>
+            <a href="/processed/${filename_html}" download class="btn-download">&darr; Download</a>
         </div>
     </div>
-    <div class="content">${content}</div>
+    <div class="content">${content_html}</div>
 </body>
 </html>

@@ -1,4 +1,4 @@
-"""
+﻿"""
 File I/O utilities: save uploads, extract PDF text, move processed files.
 
 Also contains shared helpers used across main.py and router_engine.py.
@@ -36,6 +36,9 @@ def build_pipeline_url(pipeline: Pipeline, file_name: str | None = None) -> str 
     elif pipeline == Pipeline.LLM:
         url = config.LLM_UI_URL
     else:
+        return None
+
+    if not url:
         return None
 
     if file_name:
@@ -95,7 +98,22 @@ def extract_document_raw_text(source: Path | str) -> str:
     # If the text file exists from a previous extract() call, use it.
     # Otherwise, trigger extraction.
     if not txt_path.exists():
-        extract_document_text(source)
+        try:
+            extract_document_text(source)
+        except Exception as exc:
+            logger.warning(
+                "extract_document_text failed for %s (expected %s): %s",
+                source,
+                txt_path,
+                exc,
+            )
+        finally:
+            if not txt_path.exists():
+                logger.warning(
+                    "Raw text file still missing after extraction attempt: source=%s txt_path=%s",
+                    source,
+                    txt_path,
+                )
 
     if txt_path.exists():
         return txt_path.read_text(encoding="utf-8")

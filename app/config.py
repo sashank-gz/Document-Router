@@ -85,6 +85,7 @@ ENABLE_PDF_TRAITS: bool = _setting_bool("ENABLE_PDF_TRAITS", "true")
 DOCLING_SAVE_MD: bool = _setting_bool("DOCLING_SAVE_MD", "true")
 DOCLING_SAVE_JSON: bool = _setting_bool("DOCLING_SAVE_JSON", "false")
 DOCLING_SAVE_HTML: bool = _setting_bool("DOCLING_SAVE_HTML", "false")
+DOCLING_SAVE_TXT: bool = _setting_bool("DOCLING_SAVE_TXT", "true")
 
 # ── Extraction & Email Routing ──────────────────────────────────────
 EXTRACTION_PREVIEW_LIMIT: int = int(_get_setting("EXTRACTION_PREVIEW_LIMIT", "200"))

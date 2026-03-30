@@ -7,6 +7,7 @@ set via environment variables.
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -47,7 +48,19 @@ def _post_file(endpoint: str, file_path: Path) -> dict:
             raise PipelineError(f"Extraction pipeline returned status {response.status_code}")
 
         content_type = response.headers.get("content-type", "")
-        payload = response.json() if "application/json" in content_type else {"raw": response.text}
+        if "application/json" in content_type:
+            try:
+                payload = response.json()
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning(
+                    "Failed to parse JSON response from %s (status=%s): %s",
+                    endpoint,
+                    response.status_code,
+                    exc,
+                )
+                payload = {"raw": response.text}
+        else:
+            payload = {"raw": response.text}
 
         return {
             "status_code": response.status_code,

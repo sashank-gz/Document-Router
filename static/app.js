@@ -471,10 +471,10 @@ function renderJobsPage() {
         const tierColor = tierColors[tierDisplay] || "var(--text-muted)";
 
         return `
-            <tr tabindex="0" onclick="selectedJobFileName='${escapeHtml(job.file_name)}'; document.querySelectorAll('.jobs-table tbody tr').forEach(r=>r.style.outline=''); this.style.outline='2px solid var(--accent)'" style="cursor:pointer;">
+            <tr tabindex="0" onclick="selectedJobFileName='${escapeJsString(job.file_name)}'; document.querySelectorAll('.jobs-table tbody tr').forEach(r=>r.style.outline=''); this.style.outline='2px solid var(--accent)'" style="cursor:pointer;">
                 <td>${job.id}</td>
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
-                    <a href="#" onclick="event.preventDefault(); openDocPreview('${escapeHtml(job.file_name)}')" style="color:var(--accent); text-decoration:none; font-weight:500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                    <a href="#" onclick="event.preventDefault(); openDocPreview('${escapeJsString(job.file_name)}')" style="color:var(--accent); text-decoration:none; font-weight:500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
                         ${escapeHtml(getOriginalName(job.file_name))}
                     </a>
                 </td>
@@ -576,6 +576,17 @@ function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+}
+
+function escapeJsString(text) {
+    return String(text ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, "\\\"")
+        .replace(/`/g, "\\`")
+        .replace(/\r?\n/g, "\\n")
+        .replace(/\u2028/g, "\\u2028")
+        .replace(/\u2029/g, "\\u2029");
 }
 
 /**

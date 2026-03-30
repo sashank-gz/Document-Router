@@ -1,7 +1,7 @@
+import argparse
 import concurrent.futures
 import json
 import logging
-import sys
 import time
 from pathlib import Path
 
@@ -44,7 +44,7 @@ def upload_file(idx):
             logger.info(f"Task {idx}: Upload successful. Job ID: {job_id}")
             return job_id
         else:
-            logger.error(f"Task {idx}: Upload failed with status {response.code}")
+            logger.error(f"Task {idx}: Upload failed with status {response.status_code}")
             return None
     except Exception as e:
         logger.error(f"Task {idx}: Error during upload: {str(e)}")
@@ -98,6 +98,8 @@ def run_stress_test(num_requests, workers):
             j_id = status_futures[future]
             try:
                 status = future.result()
+                if status is None:
+                    status = "ERRORS"
                 results[status] = results.get(status, 0) + 1
                 logger.info(f"Job {j_id} finished with status: {status}")
             except Exception as e:
@@ -112,11 +114,13 @@ def run_stress_test(num_requests, workers):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        num = int(sys.argv[1])
-        work = int(sys.argv[2])
-    else:
-        num = NUM_REQUESTS
-        work = WORKERS
+    parser = argparse.ArgumentParser(description="Simulate concurrent uploads against the router")
+    parser.add_argument(
+        "num", nargs="?", type=int, default=NUM_REQUESTS, help="Number of requests to fire"
+    )
+    parser.add_argument(
+        "workers", nargs="?", type=int, default=WORKERS, help="Number of worker threads"
+    )
+    args = parser.parse_args()
 
-    run_stress_test(num, work)
+    run_stress_test(args.num, args.workers)

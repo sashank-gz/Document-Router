@@ -109,8 +109,12 @@ class AdvancedDoclingExtractor:
             (parent / f"{stem}.json").write_text(
                 json.dumps(output_json, indent=2), encoding="utf-8"
             )
-        # Store raw text for classification audit if needed
-        (parent / f"{stem}.txt").write_text(result.raw_text, encoding="utf-8")
+        # Store raw text for classification audit if enabled
+        if config.DOCLING_SAVE_TXT:
+            raw_text = getattr(result, "raw_text", None)
+            if raw_text is None:
+                raw_text = getattr(result, "html", "") or ""
+            (parent / f"{stem}.txt").write_text(str(raw_text), encoding="utf-8")
 
         if config.DOCLING_SAVE_HTML and hasattr(result, "html"):
             (parent / f"{stem}.html").write_text(result.html, encoding="utf-8")

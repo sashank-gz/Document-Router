@@ -98,10 +98,14 @@ Each uploaded document goes through a 3-tier classifier:
 | 3 | AI/LLM classification (Groq or Gemini) | ~1-2 sec | Free tier |
 
 **Decision logic:**
-- Tier 2 is the primary classifier
-- Tier 1 alone does NOT classify — it only detects conflicts
-- If Tier 1 and Tier 2 disagree, Tier 3 (LLM) breaks the tie
-- If no tier matches → document goes to **Manual Review**
+1. Run Tier 2 (text keyword scan) on the first N pages.
+2. If Tier 2 identifies a type:
+	- If Tier 1 (filename) identifies a different type (**disagree** / conflict) → invoke Tier 3 (LLM) to break the tie.
+	- Otherwise, accept the Tier 2 result.
+3. If Tier 2 finds nothing:
+	- If Tier 1 identifies a type → ignore the standalone Tier 1 result and invoke Tier 3 (LLM) as the fallback to ensure high-confidence classification.
+	- If Tier 1 does not identify a type → send to **Manual Review**.
+4. If Tier 3 is unavailable or also returns nothing after the above steps → **Manual Review**.
 
 ## Document Types
 

@@ -167,20 +167,40 @@ class EmailHandler(BaseHandler):
             raise ValueError(f"Unsupported email format: {ext}")
 
         # Extract metadata and attachments
-        metadata, attachments = parser(file_path, file_path.parent)
+        metadata: dict[str, Any] | None = None
+        attachments: list[Path] = []
+        try:
+            metadata, attachments = parser(file_path, file_path.parent)
 
-        # Unified markdown formatting
-        md_content = (
-            f"# Email: {metadata['subject']}\n**From:** {metadata['from']}\n\n{metadata['body']}"
-        )
-        raw_text = self._normalize_text(md_content)
+            subject = (
+                metadata.get("subject", "(no subject)")
+                if isinstance(metadata, dict)
+                else "(no subject)"
+            )
+            sender = (
+                metadata.get("from", "(unknown)") if isinstance(metadata, dict) else "(unknown)"
+            )
+            body = metadata.get("body", "") if isinstance(metadata, dict) else ""
 
-        return ExtractionResult(
-            raw_text=raw_text,
-            markdown=md_content,
-            structured_json=metadata,
-            attachments=attachments,
-        )
+            # Unified markdown formatting
+            md_content = f"# Email: {subject}\n**From:** {sender}\n\n{body}"
+            raw_text = self._normalize_text(md_content)
+
+            return ExtractionResult(
+                raw_text=raw_text,
+                markdown=md_content,
+                structured_json=metadata if isinstance(metadata, dict) else {},
+                attachments=attachments,
+            )
+        except Exception:
+            logger.exception("Email extraction failed for %s", file_path)
+            safe_metadata = metadata if isinstance(metadata, dict) else {}
+            return ExtractionResult(
+                raw_text="",
+                markdown="",
+                structured_json=safe_metadata,
+                attachments=[],
+            )
 
 
 class ExtractionRegistry:

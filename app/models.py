@@ -178,6 +178,41 @@ class JobStore:
             conn.execute(query, tuple(params))
             conn.commit()
 
+    def append_job_log(self, job_id: int, msg: str, max_entries: int = 200) -> None:
+        """Atomically append a log message to a job's debug_info log list."""
+        import json
+
+        with self._connect() as conn:
+            # Use BEGIN IMMEDIATE to lock the database for writing
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute("SELECT debug_info FROM jobs WHERE id = ?", (job_id,)).fetchone()
+                if not row:
+                    return
+
+                debug_info_raw = row["debug_info"]
+                try:
+                    debug_info = json.loads(debug_info_raw) if debug_info_raw else {}
+                except json.JSONDecodeError:
+                    debug_info = {}
+
+                logs = debug_info.get("logs", [])
+                if not isinstance(logs, list):
+                    logs = []
+
+                logs.append(msg)
+                logs = logs[-max_entries:]
+                debug_info["logs"] = logs
+
+                conn.execute(
+                    "UPDATE jobs SET debug_info = ? WHERE id = ?",
+                    (json.dumps(debug_info), job_id),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
     def _parse_row(self, row) -> JobRecord:
         import json
 

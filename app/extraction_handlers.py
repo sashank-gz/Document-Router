@@ -194,12 +194,13 @@ class EmailHandler(BaseHandler):
             )
         except Exception:
             logger.exception("Email extraction failed for %s", file_path)
+            # Graceful degradation: return what we have (even partial results are better than none)
             safe_metadata = metadata if isinstance(metadata, dict) else {}
             return ExtractionResult(
                 raw_text="",
                 markdown="",
                 structured_json=safe_metadata,
-                attachments=[],
+                attachments=attachments,
             )
 
 

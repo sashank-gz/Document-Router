@@ -104,7 +104,11 @@ def parse_msg(file_path: Path, output_dir: Path) -> tuple[dict[str, Any], list[P
         output_root = output_dir.resolve()
         attachments = []
         for attachment in msg.attachments:
+            # Skip non-file attachments (like inline images/embedded messages if they don't have filenames)
             filename = attachment.getFilename() or ""
+            if not filename:
+                continue
+
             safe_name = Path(filename).name
             if not safe_name or safe_name in {".", ".."} or "\x00" in safe_name:
                 logger.warning("Skipping unsafe attachment filename in %s", file_path.name)
@@ -115,16 +119,18 @@ def parse_msg(file_path: Path, output_dir: Path) -> tuple[dict[str, Any], list[P
                 logger.warning("Skipping attachment with traversal attempt: %s", safe_name)
                 continue
 
-            saved_path = attachment.save(customPath=str(output_dir))
-            att_path = Path(saved_path) if saved_path else candidate_path
-            if not att_path.is_absolute():
-                att_path = (output_dir / att_path).resolve()
-
-            if output_root not in att_path.parents:
-                logger.warning("Skipping saved attachment outside output dir: %s", att_path)
-                continue
-
-            attachments.append(att_path)
+            try:
+                # Use raw bytes data to avoid attachment.save() path traversal risks
+                data = attachment.data
+                if data:
+                    candidate_path.write_bytes(data)
+                    attachments.append(candidate_path)
+                else:
+                    logger.warning("Attachment %s in %s has no data", safe_name, file_path.name)
+            except Exception as e:
+                logger.error("Failed to save attachment %s: %s", safe_name, e)
+                if candidate_path.exists():
+                    candidate_path.unlink()
 
         return _build_email_metadata(subject, sender, body), attachments
     finally:

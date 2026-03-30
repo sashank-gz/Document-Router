@@ -8,7 +8,6 @@ debug_info for real-time display in the frontend UI.
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from contextvars import ContextVar
@@ -71,35 +70,11 @@ class JobStatusLogHandler(logging.Handler):
                 return
 
             try:
-                job = self.job_store.get_job(job_id)
+                self.job_store.append_job_log(job_id, msg, max_entries=MAX_LOG_ENTRIES)
             except Exception as e:
-                # Use sys.stderr or print if logger fails to avoid recursion loops
-                print(f"ERROR: get_job failed for {job_id} in log_handler: {e}", file=sys.stderr)
-                return
-
-            if not job:
-                return
-
-            debug_info = job.debug_info or {}
-            if isinstance(debug_info, str):
-                try:
-                    debug_info = json.loads(debug_info)
-                except Exception:
-                    debug_info = {}
-
-            logs = debug_info.get("logs", [])
-            if not isinstance(logs, list):
-                logs = []
-
-            logs.append(msg)
-            # Enforce maximum retained log entries
-            logs = logs[-MAX_LOG_ENTRIES:]
-            debug_info["logs"] = logs
-
-            try:
-                payload = json.dumps(debug_info)
-                self.job_store.update_job(job_id, debug_info=payload)
-            except Exception as e:
-                print(f"ERROR: update_job failed for {job_id} in log_handler: {e}", file=sys.stderr)
+                print(
+                    f"ERROR: append_job_log failed for {job_id} in log_handler: {e}",
+                    file=sys.stderr,
+                )
         finally:
             _in_log_handler.reset(token)

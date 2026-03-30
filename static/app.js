@@ -247,17 +247,17 @@ function displayResults(results) {
         if (r.debug) {
             const debugId = `debug-${Date.now()}-${i}`;
             debugHtml = `
-                <button class="debug-toggle" onclick="toggleDebug('${debugId}')">
+                <button class="debug-toggle" data-target="${debugId}">
                     ▸ Debug info
                 </button>
-                <div class="debug-content" id="${debugId}" hidden>${JSON.stringify(r.debug, null, 2)}</div>
+                <div class="debug-content" id="${debugId}" hidden>${escapeHtml(JSON.stringify(r.debug, null, 2))}</div>
             `;
         }
 
         let openBtnHtml = "";
         if (r.status === "REQUIRES_PASSWORD") {
             openBtnHtml = `
-                <button class="btn btn-open" style="background: var(--error-bg); color: var(--error); border: 1px solid var(--error); cursor: pointer;" onclick="openUnlockModal(${r.job_id || 0})">
+                <button class="btn btn-open btn-unlock" data-job-id="${r.job_id || 0}" style="background: var(--error-bg); color: var(--error); border: 1px solid var(--error); cursor: pointer;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -311,8 +311,7 @@ function displayResults(results) {
                         <span class="confidence-value">${confidencePercent}%</span>
                     </div>
                 </div>
-                ${logsHtml}
-                    ${debugHtml}
+                ${debugHtml}
                 ${exportsHtml}
                 ${r.message ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(r.message)}</div>` : ""}
             </div>
@@ -398,7 +397,7 @@ function renderJobsPage() {
         let actionHtml = "—";
         if (job.status === "REQUIRES_PASSWORD") {
             actionHtml = `
-                <button class="btn btn-open" style="background: var(--error-bg); color: var(--error); border: 1px solid var(--error); cursor: pointer;" onclick="openUnlockModal(${job.id})">
+                <button class="btn btn-open btn-unlock" style="background: var(--error-bg); color: var(--error); border: 1px solid var(--error); cursor: pointer;">
                     Unlock
                 </button>
             `;
@@ -427,7 +426,7 @@ function renderJobsPage() {
             const logsId = `logs-job-${job.id}`;
             const formattedLogs = logsArray.map(l => `<div style="margin-bottom: 2px;">${escapeHtml(l)}</div>`).join('');
             logsBtn = `
-                <button class="debug-toggle" onclick="toggleDebug('${logsId}', this, 'Terminal Logs')" style="font-size: 0.75rem; padding: 4px 8px; background: #1F2937; color: #10B981; border: 1px solid #374151; border-radius: 4px; cursor: pointer;">
+                <button class="debug-toggle" data-target="${logsId}" data-base-text="Terminal Logs" style="font-size: 0.75rem; padding: 4px 8px; background: #1F2937; color: #10B981; border: 1px solid #374151; border-radius: 4px; cursor: pointer;">
                     View Terminal Logs
                 </button>
             `;
@@ -443,7 +442,7 @@ function renderJobsPage() {
         if (job.debug_info && Object.keys(job.debug_info).length > 0) {
             const debugId = `debug-job-${job.id}`;
             debugBtn = `
-                <button class="debug-toggle" onclick="toggleDebug('${debugId}', this, 'JSON Data')" style="font-size: 0.75rem; padding: 4px 8px; background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">
+                <button class="debug-toggle" data-target="${debugId}" data-base-text="JSON Data" style="font-size: 0.75rem; padding: 4px 8px; background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">
                     View JSON Data
                 </button>
             `;
@@ -471,10 +470,10 @@ function renderJobsPage() {
         const tierColor = tierColors[tierDisplay] || "var(--text-muted)";
 
         return `
-            <tr tabindex="0" onclick="selectedJobFileName='${escapeJsString(job.file_name)}'; document.querySelectorAll('.jobs-table tbody tr').forEach(r=>r.style.outline=''); this.style.outline='2px solid var(--accent)'" style="cursor:pointer;">
+            <tr tabindex="0" data-filename="${escapeJsString(job.file_name)}" data-job-id="${job.id}" style="cursor:pointer;">
                 <td>${job.id}</td>
                 <td class="file-cell" title="${escapeHtml(job.file_name)}">
-                    <a href="#" onclick="event.preventDefault(); openDocPreview('${escapeJsString(job.file_name)}')" style="color:var(--accent); text-decoration:none; font-weight:500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                    <a href="#" style="color:var(--accent); text-decoration:none; font-weight:500;">
                         ${escapeHtml(getOriginalName(job.file_name))}
                     </a>
                 </td>
@@ -579,11 +578,15 @@ function escapeHtml(text) {
 }
 
 function escapeJsString(text) {
-    return String(text ?? "")
+    if (text == null) return "";
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+        .replace(/`/g, "&#96;")
         .replace(/\\/g, "\\\\")
-        .replace(/'/g, "\\'")
-        .replace(/"/g, "\\\"")
-        .replace(/`/g, "\\`")
         .replace(/\r?\n/g, "\\n")
         .replace(/\u2028/g, "\\u2028")
         .replace(/\u2029/g, "\\u2029");
@@ -637,6 +640,72 @@ document.addEventListener("keydown", (e) => {
 // ── Init ──────────────────────────────────────────────────────
 checkHealth();
 loadJobs();
+
+// Event delegation for jobs table
+jobsTbody.addEventListener("click", (e) => {
+    const row = e.target.closest("tr");
+    if (!row || row.classList.contains("empty-row")) return;
+
+    const filename = row.dataset.filename;
+    const jobId = row.dataset.jobId;
+
+    // Handle row selection (unless clicking a specific action button)
+    if (filename && !e.target.closest("button") && !e.target.closest("a")) {
+        selectedJobFileName = filename;
+        document.querySelectorAll(".jobs-table tbody tr").forEach(r => r.style.outline = "");
+        row.style.outline = "2px solid var(--accent)";
+    }
+
+    // Handle file preview link
+    const previewLink = e.target.closest(".file-cell a");
+    if (previewLink) {
+        e.preventDefault();
+        openDocPreview(filename);
+        return;
+    }
+
+    // Handle unlock button
+    if (e.target.classList.contains("btn-unlock")) {
+        openUnlockModal(jobId);
+        return;
+    }
+
+    // Handle debug toggles
+    const debugBtn = e.target.closest(".debug-toggle");
+    if (debugBtn) {
+        const targetId = debugBtn.dataset.target;
+        const baseText = debugBtn.dataset.baseText;
+        toggleDebug(targetId, debugBtn, baseText);
+        return;
+    }
+});
+
+jobsTbody.addEventListener("mouseover", (e) => {
+    const link = e.target.closest(".file-cell a");
+    if (link) link.style.textDecoration = "underline";
+});
+
+jobsTbody.addEventListener("mouseout", (e) => {
+    const link = e.target.closest(".file-cell a");
+    if (link) link.style.textDecoration = "none";
+});
+
+// Event delegation for results grid
+resultsGrid.addEventListener("click", (e) => {
+    // Handle unlock button
+    const unlockBtn = e.target.closest(".btn-unlock");
+    if (unlockBtn) {
+        openUnlockModal(unlockBtn.dataset.jobId);
+        return;
+    }
+
+    // Handle debug toggle
+    const debugBtn = e.target.closest(".debug-toggle");
+    if (debugBtn) {
+        toggleDebug(debugBtn.dataset.target);
+        return;
+    }
+});
 
 // ── Periodically check health ────────────────────────────────
 setInterval(checkHealth, 30000);

@@ -12,6 +12,9 @@ LLM_SCAN_MAX_PAGES = 3
 # Max characters to send to LLM (prevents 'Request Too Large' errors). Default: 4000
 LLM_MAX_TEXT_CHARS = 4000
 
+# Minimum normalized text length before Tier 3 LLM is allowed. Default: 180
+LLM_MIN_TEXT_CHARS = 180
+
 # Creativity of the AI (0.0 = deterministic/logical, 0.7 = creative). Default: 0.0
 LLM_TEMPERATURE = 0.0
 

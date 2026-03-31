@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 from pathlib import Path
 
 import requests
@@ -31,10 +32,11 @@ def _safe_body_preview(body: str, limit: int = 200) -> str:
 
 
 def _post_file(endpoint: str, file_path: Path) -> dict:
-    """POST a PDF to an extraction service and return the parsed response."""
+    """POST a file to an extraction service and return the parsed response."""
     try:
         with file_path.open("rb") as f:
-            files = {"file": (file_path.name, f, "application/pdf")}
+            mime_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+            files = {"file": (file_path.name, f, mime_type)}
             response = requests.post(endpoint, files=files, timeout=config.PIPELINE_TIMEOUT)
 
         if response.status_code >= 400:

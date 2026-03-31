@@ -215,10 +215,26 @@ class EmailHandler(BaseHandler):
             sender = (
                 metadata.get("from", "(unknown)") if isinstance(metadata, dict) else "(unknown)"
             )
+            recipient = metadata.get("to", "") if isinstance(metadata, dict) else ""
+            date = metadata.get("date", "") if isinstance(metadata, dict) else ""
             body = metadata.get("body", "") if isinstance(metadata, dict) else ""
 
-            # Unified markdown formatting
-            md_content = f"# Email: {subject}\n**From:** {sender}\n\n{body}"
+            header_lines = [
+                f"# Email: {subject}",
+                f"**From:** {sender}",
+            ]
+            if recipient:
+                header_lines.append(f"**To:** {recipient}")
+            if date:
+                header_lines.append(f"**Date:** {date}")
+            if attachments:
+                header_lines.append(
+                    "**Attachments:** " + ", ".join(att.name for att in attachments)
+                )
+
+            md_content = "\n".join(header_lines)
+            if body:
+                md_content = f"{md_content}\n\n{body}"
             raw_text = self._normalize_text(md_content)
 
             return ExtractionResult(

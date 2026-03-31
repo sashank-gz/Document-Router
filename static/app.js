@@ -291,8 +291,7 @@ function displayResults(results) {
             const stem = r.file_name.replace(/\.[^/.]+$/, "");
             exportsHtml = `<div style="margin-top:6px; display:flex; gap:4px; font-size:0.75rem;">`;
             r.available_outputs.forEach(ext => {
-                const lower = ext.toLowerCase();
-                const viewUrl = (lower === 'md' || lower === 'json' || lower === 'html') ? `/view/${stem}.${lower}` : `/processed/${stem}.${lower}`;
+                const viewUrl = getExportUrl(stem, ext);
                 exportsHtml += `<a href="${viewUrl}" target="_blank" class="badge" style="text-decoration:none; background:var(--bg-card); border:1px solid var(--border-color); color:var(--text-color); cursor:pointer;">↓ Docling ${ext}</a>`;
             });
             exportsHtml += `</div>`;
@@ -421,8 +420,7 @@ function renderJobsPage() {
         if (job.available_outputs && job.available_outputs.length > 0) {
             const stem = job.file_name.replace(/\.[^/.]+$/, "");
             job.available_outputs.forEach(ext => {
-                const lower = ext.toLowerCase();
-                const viewUrl = (lower === 'md' || lower === 'json' || lower === 'html') ? `/view/${stem}.${lower}` : `/processed/${stem}.${lower}`;
+                const viewUrl = getExportUrl(stem, ext);
                 exportsHtml += `<a href="${viewUrl}" target="_blank" style="text-decoration:none; padding:4px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:var(--text-color); font-size:0.75rem;">${ext}</a>\n`;
             });
         }
@@ -466,8 +464,8 @@ function renderJobsPage() {
         }
 
         // ── Doc Type column ─────────────────────────────────
-        const docType = job.document_type || (job.debug_info ? job.debug_info.final_result : null) || "—";
-        const docTypeDisplay = docType === "UNKNOWN" ? "—" : docType.replace(/_/g, ' ');
+        const docType = job.document_type || (job.debug_info ? job.debug_info.final_result : null) || "UNKNOWN";
+        const docTypeDisplay = docType.replace(/_/g, ' ');
 
         // ── Tier column ────────────────────────────────────
         const tierRaw = job.classification_tier || "";
@@ -613,14 +611,65 @@ function getOriginalName(fileName) {
 // ── Document Preview Modal ─────────────────────────────────────────
 let currentPreviewFileName = null;
 
+// ── Document Preview Utilities ─────────────────────────────────────
+
+/**
+ * Determine if a file type is natively supported by modern browsers for iframe preview.
+ * @param {string} fileName 
+ */
+function isNativePreviewFormat(fileName) {
+    const ext = (fileName || "").toLowerCase().split(".").pop();
+    const nativeFormats = ["pdf", "png", "jpg", "jpeg", "webp", "gif", "txt", "html"];
+    return nativeFormats.includes(ext);
+}
+
+/**
+ * Resolve the appropriate preview URL for a given stored filename.
+ * @param {string} fileName 
+ */
+function getPreviewUrl(fileName) {
+    if (!fileName) return "";
+
+    // For native formats, serve original file (now served inline by backend).
+    if (isNativePreviewFormat(fileName)) {
+        return `/processed/${encodeURIComponent(fileName)}`;
+    }
+
+    // For non-native formats (Word, Excel, Email), Docling generates a Markdown 
+    // extract which we use as the primary preview source via the /view/ endpoint.
+    const stem = fileName.replace(/\.[^/.]+$/, "");
+    return `/view/${encodeURIComponent(stem)}.md`;
+}
+
+/**
+ * Resolve the URL for a specific Docling export format.
+ * @param {string} stem File name without extension 
+ * @param {string} ext Extension (md, json, html, docx, etc.)
+ */
+function getExportUrl(stem, ext) {
+    const lower = (ext || "").toLowerCase();
+    // These formats are wrapped in our styled viewer
+    if (['md', 'json', 'html', 'txt'].includes(lower)) {
+        return `/view/${encodeURIComponent(stem)}.${lower}`;
+    }
+    // Other formats (original or converted docs) are served directly
+    return `/processed/${encodeURIComponent(stem)}.${lower}`;
+}
+
+// ── Document Preview Modal ─────────────────────────────────────────
+
 function openDocPreview(storedFileName) {
     const modal = document.getElementById("doc-preview-modal");
     const iframe = document.getElementById("doc-preview-iframe");
     const title = document.getElementById("doc-preview-title");
+
     if (!modal || !iframe) return;
-    iframe.src = `/processed/${encodeURIComponent(storedFileName)}`;
+
+    // Use refined resolution logic to determine source
+    iframe.src = getPreviewUrl(storedFileName);
     title.textContent = getOriginalName(storedFileName);
     currentPreviewFileName = storedFileName;
+
     modal.showModal();
 }
 

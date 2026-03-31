@@ -234,10 +234,14 @@ def health_check() -> dict:
 
 
 @app.get("/processed/{filename}")
-def download_processed_file(filename: str) -> FileResponse:
-    """Serve a processed output file using strict filename validation."""
+def serve_processed_file(filename: str) -> FileResponse:
+    """Serve a processed output file for inline viewing or download."""
+    # resolution and validation is delegated to a specialized utility
     file_path = resolve_processed_file(PROCESSED_DIR, filename)
-    return FileResponse(file_path, filename=file_path.name)
+
+    # We omit the 'filename' parameter so FastAPI doesn't set
+    # Content-Disposition: attachment, allowing browser previews.
+    return FileResponse(file_path)
 
 
 @app.get("/view/{filename}")

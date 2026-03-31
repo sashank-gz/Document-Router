@@ -50,7 +50,7 @@ SYSTEM_PROMPT = (
     f"{SYSTEM_PROMPT_TEXT}\n\n"
     "Allowed types and descriptions:\n"
     f"{_type_details_str}\n\n"
-    'Format: {"document_type": "<TYPE>", "confidence": <0.0-1.0>}'
+    'Format: {"document_type": "<TYPE or UNKNOWN>", "confidence": <0.0-1.0>}'
 )
 
 
@@ -59,11 +59,13 @@ def _build_user_prompt(text: str) -> str:
     truncated = text[:_MAX_TEXT_CHARS]
     return (
         "Classify the following document text into one of these types: "
-        f"{', '.join(_VALID_TYPES)}.\n\n"
+        f"{', '.join(_VALID_TYPES)}.\n"
+        "Use only the provided text. Do not invent or assume missing details.\n"
+        "If the evidence is insufficient or ambiguous, return UNKNOWN.\n\n"
         "--- DOCUMENT TEXT START ---\n"
         f"{truncated}\n"
         "--- DOCUMENT TEXT END ---\n\n"
-        'Respond ONLY with JSON: {"document_type": "<TYPE>", "confidence": <0.0-1.0>}'
+        'Respond ONLY with JSON: {"document_type": "<TYPE or UNKNOWN>", "confidence": <0.0-1.0>}'
     )
 
 

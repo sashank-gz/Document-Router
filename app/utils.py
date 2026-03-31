@@ -9,7 +9,28 @@ from fastapi import HTTPException
 
 # Constants for file validation
 SAFE_PROCESSED_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._()\- ]*$")
-ALLOWED_PROCESSED_EXTENSIONS = {".pdf", ".md", ".json", ".html"}
+ALLOWED_PROCESSED_EXTENSIONS = {
+    ".pdf",
+    ".md",
+    ".json",
+    ".html",
+    ".txt",
+    ".doc",
+    ".docx",
+    ".xlsx",
+    ".xls",
+    ".xlsm",
+    ".csv",
+    ".eml",
+    ".msg",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tiff",
+    ".bmp",
+    ".webp",
+    ".zip",
+}
 
 
 def highlight_json(escaped_html: str) -> str:

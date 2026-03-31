@@ -59,6 +59,7 @@ DEBUG_MODE: bool = _env_bool("DEBUG_MODE")
 
 # ── LLM tuning parameters (Customizable in settings.txt) ────────────
 LLM_MAX_TEXT_CHARS: int = int(_get_setting("LLM_MAX_TEXT_CHARS", "4000"))
+LLM_MIN_TEXT_CHARS: int = int(_get_setting("LLM_MIN_TEXT_CHARS", "180"))
 LLM_TEMPERATURE: float = float(_get_setting("LLM_TEMPERATURE", "0.0"))
 LLM_MAX_TOKENS: int = int(_get_setting("LLM_MAX_TOKENS", "150"))
 

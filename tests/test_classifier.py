@@ -141,8 +141,8 @@ class TestClassifyDocument:
                 assert result.pipeline == Pipeline.MANUAL
                 assert result.confidence == 0.0
 
-    def test_tier1_alone_ignored(self):
-        """Tier 1 alone (without Tier 2) should NOT produce a result."""
+    def test_tier1_alone_falls_back_to_filename(self):
+        """When Tier 2 is empty and Tier 3 has no usable text, fallback should use Tier 1."""
         with patch("app.classifier._classify_by_filename") as mock_fn:
             mock_fn.return_value = ClassificationResult(
                 document_type=DocumentType["LOSS_RUN"],
@@ -150,6 +150,48 @@ class TestClassifyDocument:
                 tier="filename",
             )
             with patch("app.classifier._classify_by_keywords", return_value=None):
-                # No LLM text -> should fall to MANUAL
                 result, debug = classify_document("loss_run.pdf", "")
-                assert result.document_type == DocumentType["UNKNOWN"]
+                assert result.document_type == DocumentType["LOSS_RUN"]
+                assert result.pipeline == Pipeline.OCR
+                assert result.tier == "filename"
+
+    def test_short_llm_text_skips_tier3_and_uses_tier1(self):
+        """Very short metadata should not invoke Tier 3; fallback remains deterministic."""
+        with patch("app.classifier._classify_by_filename") as mock_fn:
+            mock_fn.return_value = ClassificationResult(
+                document_type=DocumentType["LOSS_RUN"],
+                pipeline=Pipeline.OCR,
+                tier="filename",
+            )
+            with patch("app.classifier._classify_by_keywords", return_value=None):
+                with patch("app.config.LLM_MIN_TEXT_CHARS", 180):
+                    with patch("app.llm_classifier.classify_with_llm") as mock_llm:
+                        result, debug = classify_document(
+                            "loss_run.pdf",
+                            "",
+                            llm_text="# Email: subject only\nFrom: sender@example.com",
+                        )
+                        assert result.document_type == DocumentType["LOSS_RUN"]
+                        assert result.pipeline == Pipeline.OCR
+                        assert result.tier == "filename"
+                        mock_llm.assert_not_called()
+
+    def test_tier1_only_long_text_prefers_filename_without_llm(self):
+        """Tier 1-only flows should stay deterministic and skip Tier 3."""
+        with patch("app.classifier._classify_by_filename") as mock_fn:
+            mock_fn.return_value = ClassificationResult(
+                document_type=DocumentType["LOSS_RUN"],
+                pipeline=Pipeline.OCR,
+                tier="filename",
+            )
+            with patch("app.classifier._classify_by_keywords", return_value=None):
+                with patch("app.llm_classifier.classify_with_llm") as mock_llm:
+                    result, debug = classify_document(
+                        "loss_run.pdf",
+                        "",
+                        llm_text="This is a long body text " * 30,
+                    )
+                    assert result.document_type == DocumentType["LOSS_RUN"]
+                    assert result.pipeline == Pipeline.OCR
+                    assert result.tier == "filename"
+                    mock_llm.assert_not_called()

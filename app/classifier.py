@@ -90,10 +90,12 @@ def _resolve_classification(
         logger.info("Tier 2 match: %s", t2_result.document_type.value)
         return t2_result, False
 
-    # Case C: Only Tier 1 matches (Now ignored as a standalone classifier)
+    # Case C: Only Tier 1 matches
+    # Final decision is deferred to classify_document(), which may use Tier 3 first
+    # and then fall back to Tier 1 if no stronger signal is available.
     if t1_result:
         logger.info(
-            "Tier 1 match (%s) but Tier 2 failed. Ignoring T1 and falling back to Tier 3.",
+            "Tier 1 match (%s) but Tier 2 failed. Deferring to Tier 3.",
             t1_result.document_type.value,
         )
 
@@ -128,12 +130,17 @@ def classify_document(
     # 3. Decision Logic
     result, is_conflict = _resolve_classification(t1_result, t2_result, debug)
 
+    llm_text_normalized = " ".join((llm_text or "").split())
+    llm_text_length = len(llm_text_normalized)
+    llm_can_run = llm_text_length >= config.LLM_MIN_TEXT_CHARS
+    tier1_only_case = bool(t1_result and not t2_result and not is_conflict)
+
     # 4. Tier 3 (LLM) - Tie-breaker OR Fallback
-    if (not result or is_conflict) and llm_text and llm_text.strip():
+    if (not result or is_conflict) and llm_text_normalized and llm_can_run and not tier1_only_case:
         try:
             from .llm_classifier import classify_with_llm
 
-            llm_result, llm_debug = classify_with_llm(llm_text)
+            llm_result, llm_debug = classify_with_llm(llm_text_normalized)
             if config.DEBUG_MODE:
                 debug["tier_3_llm"] = llm_debug
             if llm_result:
@@ -143,8 +150,23 @@ def classify_document(
             logger.exception("Tier 3 (LLM) tie-breaker failed")
             if config.DEBUG_MODE:
                 debug["tier_3_error"] = "LLM failed"
+    elif (not result or is_conflict) and llm_text_normalized and config.DEBUG_MODE:
+        if tier1_only_case:
+            debug["tier_3_skipped_reason"] = "tier1_only_preferred"
+        else:
+            debug["tier_3_skipped_reason"] = (
+                f"insufficient_text:{llm_text_length}<{config.LLM_MIN_TEXT_CHARS}"
+            )
 
-    # 5. Final Fallback
+    # 5. Tier 1 safety fallback when Tier 2 is missing and Tier 3 is unavailable/inconclusive
+    if not result and t1_result and not t2_result:
+        logger.info(
+            "Tier 3 unavailable or inconclusive; falling back to Tier 1: %s",
+            t1_result.document_type.value,
+        )
+        result = t1_result
+
+    # 6. Final Fallback
     if not result:
         logger.info("No classification tier matched: %s → MANUAL", filename)
         result = ClassificationResult(

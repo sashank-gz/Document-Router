@@ -49,4 +49,4 @@ DOCLING_SAVE_HTML = false
 # if AT LEAST ONE defined keyword is found. It completely skips the LLM (Tier 3)
 # fallback for low-confidence matches. Set to false to re-enable strict safety.
 # Tradeoff: True saves cost/latency but risks misclassification. False is safer.
-FORCE_TIER2_MATCH = false
+FORCE_TIER2_MATCH = true

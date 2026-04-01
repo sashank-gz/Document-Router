@@ -69,6 +69,23 @@ class DoclingHandler(BaseHandler):
             doc = result.document
 
             markdown = doc.export_to_markdown()
+
+            # Process embedded images natively stored as zip media (Word, PPT, etc.)
+            from .media_utils import extract_and_ocr_media
+
+            if file_path.suffix.lower() not in {
+                ".pdf",
+                ".png",
+                ".jpg",
+                ".jpeg",
+                ".tiff",
+                ".bmp",
+                ".webp",
+            }:
+                media_md = extract_and_ocr_media(file_path)
+                if media_md:
+                    markdown += media_md
+
             # For classification, we use the raw text content
             raw_text = self._normalize_text(markdown)
 
@@ -133,6 +150,15 @@ class ExcelHandler(BaseHandler):
                 )
 
             markdown_out = "\n\n".join(full_markdown)
+
+            # Process any charts, screenshots or images loosely embedded in the workbook
+            from .media_utils import extract_and_ocr_media
+
+            media_md = extract_and_ocr_media(file_path)
+            if media_md:
+                markdown_out += media_md
+                classification_text.append(media_md)
+
             raw_text_out = self._normalize_text("\n".join(classification_text))
 
             return ExtractionResult(
@@ -235,6 +261,13 @@ class EmailHandler(BaseHandler):
             md_content = "\n".join(header_lines)
             if body:
                 md_content = f"{md_content}\n\n{body}"
+
+            from .media_utils import ocr_email_attachments
+
+            att_md = ocr_email_attachments(attachments)
+            if att_md:
+                md_content += att_md
+
             raw_text = self._normalize_text(md_content)
 
             return ExtractionResult(

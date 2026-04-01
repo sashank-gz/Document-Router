@@ -18,3 +18,12 @@ governing law
 fraud notice
 signature page
 official policy
+policy number
+form number
+mailing address
+authorized officer
+common policy declarations
+commercial property coverage part
+general liability coverage part
+schedule of forms
+in witness whereof

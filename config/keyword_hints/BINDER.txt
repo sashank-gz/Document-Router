@@ -12,3 +12,10 @@ subject to terms
 limit of liability
 deductible amount
 premium deposit
+binder of insurance
+binder #
+transaction type
+subject to the following
+total premium
+authorized signature
+binding authority

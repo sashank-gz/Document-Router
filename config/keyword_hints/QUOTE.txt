@@ -17,3 +17,12 @@ valid until
 expiry date of quote
 carrier quote
 agent indication
+insurance quote
+indicative proposal
+valid for 30 days
+underwriting requirements
+quote expiration
+proposed limits
+proposed premium
+declination
+terms and conditions of quote

@@ -51,11 +51,22 @@ def _get_setting(key: str, default: str) -> str:
 KEYWORD_SCAN_MAX_PAGES: int = int(_get_setting("KEYWORD_SCAN_MAX_PAGES", "3"))
 CLASSIFICATION_MAX_PAGES: int = int(_get_setting("LLM_SCAN_MAX_PAGES", "3"))
 
-# Confidence scores (Customizable in settings.txt)
-CONFIDENCE_FILENAME: float = float(_get_setting("CONFIDENCE_FILENAME", "0.7"))
-CONFIDENCE_KEYWORD: float = float(_get_setting("CONFIDENCE_KEYWORD", "0.9"))
+# Classification logic thresholds (Customizable in settings.txt)
+TIER2_STRONG_THRESHOLD: float = float(_get_setting("TIER2_STRONG_THRESHOLD", "0.35"))
+TIER2_WEAK_THRESHOLD: float = float(_get_setting("TIER2_WEAK_THRESHOLD", "0.1"))
+TIER2_DOMINANCE_THRESHOLD: float = float(_get_setting("TIER2_DOMINANCE_THRESHOLD", "2.0"))
 
 DEBUG_MODE: bool = _env_bool("DEBUG_MODE")
+
+
+def _setting_bool(key: str, default: str = "false") -> bool:
+    """Read a boolean from settings.txt, overridable by env var."""
+    settings_val = _get_setting(key, default)
+    fallback = settings_val.strip().lower() in ("true", "1", "yes")
+    return _env_bool(key, fallback)
+
+
+FORCE_TIER2_MATCH: bool = _setting_bool("FORCE_TIER2_MATCH", "true")
 
 # ── LLM tuning parameters (Customizable in settings.txt) ────────────
 LLM_MAX_TEXT_CHARS: int = int(_get_setting("LLM_MAX_TEXT_CHARS", "4000"))

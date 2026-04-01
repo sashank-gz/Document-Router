@@ -50,7 +50,7 @@ SYSTEM_PROMPT = (
     f"{SYSTEM_PROMPT_TEXT}\n\n"
     "Allowed types and descriptions:\n"
     f"{_type_details_str}\n\n"
-    'Format: {"document_type": "<TYPE or UNKNOWN>", "confidence": <0.0-1.0>}'
+    'Format: {"document_type": "<TYPE or UNKNOWN>", "score": <0.0-1.0>}'
 )
 
 
@@ -65,7 +65,7 @@ def _build_user_prompt(text: str) -> str:
         "--- DOCUMENT TEXT START ---\n"
         f"{truncated}\n"
         "--- DOCUMENT TEXT END ---\n\n"
-        'Respond ONLY with JSON: {"document_type": "<TYPE or UNKNOWN>", "confidence": <0.0-1.0>}'
+        'Respond ONLY with JSON: {"document_type": "<TYPE or UNKNOWN>", "score": <0.0-1.0>}'
     )
 
 
@@ -74,7 +74,7 @@ def _build_user_prompt(text: str) -> str:
 
 def _parse_llm_response(raw: str) -> dict | None:
     """
-    Extract {"document_type": "...", "confidence": ...} from the LLM response.
+    Extract {"document_type": "...", "score": ...} from the LLM response.
 
     Handles cases where the LLM wraps JSON in markdown fences or extra text.
     """
@@ -194,7 +194,7 @@ def classify_with_llm(text: str) -> tuple[ClassificationResult | None, dict]:
         return None, debug
 
     doc_type_str = parsed.get("document_type", "").upper()
-    confidence = float(parsed.get("confidence", 0.0))
+    score = float(parsed.get("score") or parsed.get("confidence") or 0.0)
 
     # Validate against our enum
     try:
@@ -214,7 +214,7 @@ def classify_with_llm(text: str) -> tuple[ClassificationResult | None, dict]:
             document_type=doc_type,
             pipeline=get_pipeline(doc_type),
             tier="llm",
-            confidence=confidence,
+            score=score,
         ),
         debug,
     )

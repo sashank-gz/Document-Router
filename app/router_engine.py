@@ -1,4 +1,4 @@
-"""
+﻿"""
 Core routing workflow - orchestrates file save, classification, pipeline
 dispatch, and job status tracking for each uploaded document.
 """
@@ -120,11 +120,11 @@ class DocumentRouterEngine:
             )
 
             logger.info(
-                "Classification complete: file=%s type=%s pipeline=%s confidence=%.2f",
+                "Classification complete: file=%s type=%s pipeline=%s score=%.2f",
                 saved_path.name,
                 classification.document_type.value,
                 classification.pipeline.value,
-                classification.confidence,
+                classification.score,
             )
 
             # 5. Route to pipeline
@@ -406,7 +406,7 @@ class DocumentRouterEngine:
                     "document_type": classification.document_type.value,
                     "pipeline": classification.pipeline.value,
                     "classification_tier": classification.tier,
-                    "confidence": classification.confidence,
+                    "confidence": classification.score,
                     "pipeline_url": build_pipeline_url(classification.pipeline),
                 }
             )
@@ -432,7 +432,7 @@ class DocumentRouterEngine:
             "document_type": classification.document_type.value,
             "pipeline": classification.pipeline.value,
             "classification_tier": classification.tier,
-            "confidence": classification.confidence,
+            "confidence": classification.score,
             "status": "COMPLETED",
             "available_outputs": list_available_outputs(path.parent, path.stem),
         }

@@ -13,3 +13,15 @@ COPE data
 square footage
 occupancy
 construction type
+schedule of values
+replacement cost value
+rcv
+acv
+actual cash value
+building limit
+equipment value
+total insured value
+tiv
+year built
+protection class
+number of stories

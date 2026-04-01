@@ -1,8 +1,28 @@
-# Phrases to look for INSIDE the document text
+# Phrases to look for Certificate of Insurance (ACORD) forms
 acord
 acord form
+acord 25
+acord 28
 certificate of insurance
 certificate of liability
 evidence of property insurance
-additional insured
+producer
+insured
+contact name
+naic #
+policy number
+authorized representative
+holder
 coverage limits
+additional insured
+commercial general liability
+automobile liability
+workers compensation
+umbrella liability
+policy period
+limit of liability
+occurrence
+aggregate
+binder
+evidence of insurance
+representative signature

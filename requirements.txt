@@ -12,3 +12,5 @@ extract-msg
 pandas
 tabulate
 openpyxl
+msoffcrypto-tool
+pyzipper

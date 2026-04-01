@@ -1,4 +1,4 @@
-﻿"""
+"""
 Core routing workflow - orchestrates file save, classification, pipeline
 dispatch, and job status tracking for each uploaded document.
 """
@@ -60,10 +60,15 @@ class DocumentRouterEngine:
             raise ValueError("Job not found")
         saved_path = self.uploads_dir / job.file_name
 
-        from .pdf_utils import analyze_pdf
+        from .file_utils import FileCategory, get_file_category
 
-        pdf_info = analyze_pdf(saved_path)
-        debug_info = {"pdf_traits": pdf_info.get("traits", [])}
+        category = get_file_category(saved_path)
+        debug_info = {}
+        if category == FileCategory.PDF:
+            from .pdf_utils import analyze_pdf
+
+            pdf_info = analyze_pdf(saved_path)
+            debug_info["pdf_traits"] = pdf_info.get("traits", [])
 
         return self._process_file(job_id, saved_path, debug_info)
 
@@ -84,7 +89,24 @@ class DocumentRouterEngine:
         debug_info["file_category"] = category.value
 
         try:
-            # 1. Pre-processing (Normalization, traits, encryption check)
+            from .security_utils import is_encrypted
+
+            # Universal password check before any format-specific extraction
+            if initial_debug_info is None and is_encrypted(saved_path):
+                # If we detect a password, immediately pause routing
+                self._update_job_status(
+                    job_id,
+                    status="REQUIRES_PASSWORD",
+                    debug_info={"password_attempts": 0},
+                )
+                return {
+                    "job_id": job_id,
+                    "file_name": saved_path.name,
+                    "status": "REQUIRES_PASSWORD",
+                    "message": "The document is protected with a password.",
+                }
+
+            # 1. Pre-processing (Normalization, traits)
             saved_path, pre_proc_res = self._run_pre_processing(
                 job_id, saved_path, debug_info, category, is_fresh=(initial_debug_info is None)
             )
@@ -206,19 +228,6 @@ class DocumentRouterEngine:
         if config.ENABLE_PDF_TRAITS:
             pdf_info = analyze_pdf(saved_path)
             traits = pdf_info.get("traits", [])
-            if pdf_info.get("is_encrypted"):
-                self._update_job_status(
-                    job_id,
-                    status="REQUIRES_PASSWORD",
-                    debug_info={"password_attempts": 0, "pdf_traits": traits},
-                )
-                return saved_path, {
-                    "job_id": job_id,
-                    "file_name": saved_path.name,
-                    "status": "REQUIRES_PASSWORD",
-                    "message": "The file is protected with a password.",
-                    "pdf_traits": traits,
-                }
             debug_info["pdf_traits"] = traits
         else:
             debug_info["pdf_traits"] = []

@@ -138,10 +138,10 @@ class UnlockRequest(BaseModel):
 
 @app.post("/jobs/{job_id}/unlock")
 def unlock_job(job_id: int, req: UnlockRequest) -> dict:
-    """Attempt to unlock a PDF job that requires a password."""
+    """Attempt to unlock a document job that requires a password."""
     import json
 
-    from .pdf_utils import unlock_pdf
+    from .security_utils import unlock_document
 
     job = job_store.get_job(job_id)
     if not job:
@@ -159,7 +159,7 @@ def unlock_job(job_id: int, req: UnlockRequest) -> dict:
         )
 
     saved_path = UPLOADS_DIR / job.file_name
-    success = unlock_pdf(saved_path, req.password)
+    success = unlock_document(saved_path, req.password)
 
     if success:
         # Mark as unlocked and process it

@@ -93,12 +93,6 @@ def analyze_pdf(file_path: Path | str) -> dict:
         logger.error("Failed to open PDF for analysis: %s", e)
         return result
 
-    if doc.needs_pass:
-        result["is_encrypted"] = True
-        result["traits"].append("Password Protected")
-        doc.close()
-        return result
-
     # ── Per-page classification ─────────────────────────────────
     all_traits: set[str] = set()
     base_types: set[str] = set()
@@ -121,22 +115,3 @@ def analyze_pdf(file_path: Path | str) -> dict:
 
     result["traits"] = traits
     return result
-
-
-def unlock_pdf(file_path: Path | str, password: str) -> bool:
-    """Attempt to decrypt a PDF and save it unlocked."""
-    try:
-        doc = fitz.open(str(file_path))
-        if doc.needs_pass:
-            is_unlocked = doc.authenticate(password)
-            if is_unlocked:
-                # Save decrypted file over itself
-                temp_path = str(file_path) + ".unlocked.pdf"
-                doc.save(temp_path)
-                doc.close()
-                Path(temp_path).replace(Path(file_path))
-                return True
-        doc.close()
-    except Exception as e:
-        logger.error("Unlock failed: %s", e)
-    return False

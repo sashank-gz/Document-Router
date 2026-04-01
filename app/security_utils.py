@@ -68,24 +68,29 @@ def unlock_document(file_path: Path | str, password: str) -> bool:
 
 
 def _is_pdf_encrypted(path: Path) -> bool:
-    doc = fitz.open(str(path))
-    needs_pass = doc.needs_pass
-    doc.close()
-    return needs_pass
+    with fitz.open(str(path)) as doc:
+        return doc.needs_pass
 
 
 def _unlock_pdf(file_path: Path, password: str) -> bool:
-    doc = fitz.open(str(file_path))
-    if doc.needs_pass:
-        is_unlocked = doc.authenticate(password)
-        if is_unlocked:
-            temp_path = str(file_path) + ".unlocked.pdf"
+    temp_path = str(file_path) + ".unlocked.pdf"
+    with fitz.open(str(file_path)) as doc:
+        if not doc.needs_pass:
+            return False
+        if not doc.authenticate(password):
+            return False
+        try:
             doc.save(temp_path)
-            doc.close()
-            Path(temp_path).replace(file_path)
-            return True
-    doc.close()
-    return False
+        except Exception:
+            Path(temp_path).unlink(missing_ok=True)
+            return False
+
+    try:
+        Path(temp_path).replace(file_path)
+        return True
+    except Exception:
+        Path(temp_path).unlink(missing_ok=True)
+        return False
 
 
 # ── MS Office Specific Handling ───────────────────────────────
@@ -106,10 +111,11 @@ def _unlock_msoffice(file_path: Path, password: str) -> bool:
     try:
         with open(file_path, "rb") as f_in:
             office_file = msoffcrypto.OfficeFile(f_in)
-            if office_file.is_encrypted():
-                office_file.load_key(password=password)
-                with open(temp_path, "wb") as f_out:
-                    office_file.decrypt(f_out)
+            if not office_file.is_encrypted():
+                return False
+            office_file.load_key(password=password)
+            with open(temp_path, "wb") as f_out:
+                office_file.decrypt(f_out)
 
         Path(temp_path).replace(file_path)
         return True

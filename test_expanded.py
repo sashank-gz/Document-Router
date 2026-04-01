@@ -63,8 +63,10 @@ def test_expanded_keywords():
 
     if all_passed:
         print("\n🎉 ALL TESTS PASSED!")
+        sys.exit(0)
     else:
         print("\n⚠️ SOME TESTS FAILED!")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

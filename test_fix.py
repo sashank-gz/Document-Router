@@ -41,6 +41,7 @@ def test_llm_fallback_fix():
     try:
         from app import config
 
+        old_min = config.LLM_MIN_TEXT_CHARS
         config.LLM_MIN_TEXT_CHARS = 10  # Temporarily override config
 
         res, debug = classify_document("report.pdf", text_weak, llm_text=long_llm_text)
@@ -53,6 +54,7 @@ def test_llm_fallback_fix():
 
         print("✅ LLM Fallback fixed and working!")
     finally:
+        config.LLM_MIN_TEXT_CHARS = old_min
         app.llm_classifier.classify_with_llm = original_classify
 
 

@@ -194,7 +194,10 @@ def classify_with_llm(text: str) -> tuple[ClassificationResult | None, dict]:
         return None, debug
 
     doc_type_str = parsed.get("document_type", "").upper()
-    score = float(parsed.get("score") or parsed.get("confidence") or 0.0)
+    score_val = parsed.get("score")
+    if score_val is None:
+        score_val = parsed.get("confidence", 0.0)
+    score = float(score_val)
 
     # Validate against our enum
     try:

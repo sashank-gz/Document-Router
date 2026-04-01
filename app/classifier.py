@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Literal
 
 from .document_types import (
     FILENAME_HINTS,
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 class ClassificationResult:
     document_type: DocumentType
     pipeline: Pipeline
-    tier: str  # "keyword" | "llm" | "none" (filename is no longer a final tier)
+    tier: Literal["keyword", "llm", "none", "both"]
     score: float = 0.0
     second_score: float = 0.0
     strength: str = "NONE"

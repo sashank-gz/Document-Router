@@ -235,13 +235,40 @@ def health_check() -> dict:
 
 @app.get("/processed/{filename}")
 def serve_processed_file(filename: str) -> FileResponse:
-    """Serve a processed output file for inline viewing or download."""
-    # resolution and validation is delegated to a specialized utility
-    file_path = resolve_processed_file(PROCESSED_DIR, filename)
+    """Serve a processed output file securely."""
+    import mimetypes
 
-    # We omit the 'filename' parameter so FastAPI doesn't set
-    # Content-Disposition: attachment, allowing browser previews.
-    return FileResponse(file_path)
+    file_path = resolve_processed_file(PROCESSED_DIR, filename)
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    mime_type = mime_type or "application/octet-stream"
+
+    # Whitelist of safe inline types
+    safe_inline_types = [
+        "application/pdf",
+        "text/plain",
+        "text/csv",
+        "application/json",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+    ]
+
+    is_safe = mime_type in safe_inline_types or mime_type.startswith("text/")
+
+    import urllib.parse
+
+    safe_name = file_path.name.replace('"', "").replace("\r", "").replace("\n", "")
+    encoded_name = urllib.parse.quote(file_path.name, safe="")
+
+    if is_safe:
+        disposition = f"inline; filename=\"{safe_name}\"; filename*=UTF-8''{encoded_name}"
+    else:
+        disposition = f"attachment; filename=\"{safe_name}\"; filename*=UTF-8''{encoded_name}"
+
+    return FileResponse(
+        file_path, media_type=mime_type, headers={"Content-Disposition": disposition}
+    )
 
 
 @app.get("/view/{filename}")

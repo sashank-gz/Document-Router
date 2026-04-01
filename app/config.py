@@ -86,12 +86,6 @@ PIPELINE_TIMEOUT: int = int(_get_setting("PIPELINE_TIMEOUT", "30"))
 
 
 # ── Extraction Storage Formats ──────────────────────────────────────
-def _setting_bool(key: str, default: str = "false") -> bool:
-    """Read a boolean from settings.txt, overridable by env var."""
-    settings_val = _get_setting(key, default)
-    fallback = settings_val.strip().lower() in ("true", "1", "yes")
-    return _env_bool(key, fallback)
-
 
 ENABLE_PDF_TRAITS: bool = _setting_bool("ENABLE_PDF_TRAITS", "true")
 DOCLING_SAVE_MD: bool = _setting_bool("DOCLING_SAVE_MD", "true")

@@ -34,33 +34,34 @@ async def test_all():
     job_store = JobStore(BASE_DIR / "test_jobs.db")
     job_store.initialize()
 
+    PROCESSED_DIR = BASE_DIR / "processed"
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     engine = DocumentRouterEngine(
-        job_store=job_store, uploads_dir=UPLOADS_DIR, processed_dir=BASE_DIR / "processed"
+        job_store=job_store, uploads_dir=UPLOADS_DIR, processed_dir=PROCESSED_DIR
     )
 
     print(f"Testing ZIP: {test_zip}")
     # Process the ZIP file
     # Note: This will try to call Docling, which might fail if models aren't loaded,
     # but we care about the SPAWNING logic here.
+    job_id = job_store.create_job(file_name=test_zip.name, route="UNKNOWN", status="UPLOADED")
     try:
         # We manually call _process_file to avoid the API overhead
-        job_id = job_store.create_job(file_name=test_zip.name, route="UNKNOWN", status="UPLOADED")
         engine._process_file(job_id, test_zip)
-
-        # Check if child jobs were created
-        jobs = job_store.list_jobs()
-        child_jobs = [j for j in jobs if j.parent_job_id == job_id]
-
-        print(f"Total jobs: {len(jobs)}")
-        print(f"Child jobs spawned: {len(child_jobs)}")
-        for cj in child_jobs:
-            print(f"  - Child Job ID {cj.job_id}: {cj.file_name}")
-
-        assert len(child_jobs) == 2, f"Expected 2 child jobs, got {len(child_jobs)}"
-        print("✓ ZIP extraction and child job spawning test passed")
-
     except Exception as e:
         print(f"Extraction failed as expected (Docling mock/dummy content): {e}")
+
+    # Check if child jobs were created
+    jobs = job_store.list_jobs()
+    child_jobs = [j for j in jobs if j.parent_job_id == job_id]
+
+    print(f"Total jobs: {len(jobs)}")
+    print(f"Child jobs spawned: {len(child_jobs)}")
+    for cj in child_jobs:
+        print(f"  - Child Job ID {cj.job_id}: {cj.file_name}")
+
+    assert len(child_jobs) == 2, f"Expected 2 child jobs, got {len(child_jobs)}"
+    print("✓ ZIP extraction and child job spawning test passed")
 
     # Cleanup
     if test_zip.exists():

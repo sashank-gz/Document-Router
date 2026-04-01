@@ -152,79 +152,8 @@ async function handleFiles(fileList) {
 
         const data = await res.json();
         const trackingIds = data.jobs.map(j => j.job_id);
-
-        let previouslyRenderedLogs = 0;
-
-        clearInterval(parsingInterval);
-        parsingInterval = setInterval(async () => {
-            try {
-                // Table check
-                const jRes = await fetch(`${API_BASE}/jobs`);
-                const allJ = await jRes.json();
-
-                let doneCounter = 0;
-
-                trackingIds.forEach(id => {
-                    const matched = allJ.find(x => x.id === id);
-                    if (matched) {
-                        if (["COMPLETED", "FAILED", "REQUIRES_PASSWORD"].includes(matched.status)) {
-                            doneCounter++;
-                        }
-                    }
-                });
-
-                progressBar.style.width = `${10 + (doneCounter / trackingIds.length) * 90}%`;
-                progressCount.textContent = `${doneCounter} / ${files.length} [ PROCESSING ]`;
-
-                // Fetch terminal logs for the active job
-                // Realistically, for multiple files, we'll fetch the first one or merge them. We'll poll trackingIds[0] for simplicity.
-                let mergedLogs = [];
-                for (let tid of trackingIds) {
-                    try {
-                        let logRes = await fetch(`${API_BASE}/jobs/${tid}/logs`);
-                        let lData = await logRes.json();
-                        mergedLogs = mergedLogs.concat(lData.logs.map(l => `[worker-${tid}] ${l}`));
-                    } catch (e) { }
-                }
-
-                if (mergedLogs.length > previouslyRenderedLogs) {
-                    const newLogs = mergedLogs.slice(previouslyRenderedLogs);
-                    newLogs.forEach(lg => {
-                        termOut.innerHTML += `<div>${escapeHtml(lg)}</div>`;
-                    });
-                    previouslyRenderedLogs = mergedLogs.length;
-                    termOut.scrollTop = termOut.scrollHeight;
-                }
-
-                // Refresh table automatically
-                allJobs = allJ;
-                renderJobsPage();
-
-                if (doneCounter === trackingIds.length) {
-                    clearInterval(parsingInterval);
-                    clearInterval(timerInterval);
-
-                    progressTitle.innerHTML = `Complete!`;
-                    progressCount.textContent = `${doneCounter} / ${files.length}`;
-                    progressBar.style.width = "100%";
-                    showToast(`${doneCounter} document(s) finished processing`, "success");
-
-                    // Stop relying on result cards implicitly if they conflict
-                    if (typeof resultsSection !== "undefined") {
-                        resultsSection.hidden = true;
-                    }
-                    termOut.innerHTML += `<div>[system] Pipeline terminated successfully.</div>`;
-                    termOut.scrollTop = termOut.scrollHeight;
-
-                    setTimeout(() => {
-                        uploadProgress.hidden = true;
-                        progressBar.style.width = "0%";
-                    }, 5000);
-                }
-            } catch (e) {
-                // Ignore network slips during poll
-            }
-        }, 500);
+        
+        startJobTracking(trackingIds, files.length);
 
     } catch (err) {
         clearInterval(timerInterval);
@@ -232,6 +161,80 @@ async function handleFiles(fileList) {
         uploadProgress.hidden = true;
         showToast(err.message || "Upload failed", "error");
     }
+}
+
+function startJobTracking(trackingIds, fileCount) {
+    let previouslyRenderedLogs = 0;
+    const termOut = document.getElementById("terminal-output");
+
+    clearInterval(parsingInterval);
+    parsingInterval = setInterval(async () => {
+        try {
+            // Table check
+            const jRes = await fetch(`${API_BASE}/jobs`);
+            const allJ = await jRes.json();
+
+            let doneCounter = 0;
+
+            trackingIds.forEach(id => {
+                const matched = allJ.find(x => x.id === id);
+                if (matched) {
+                    if (["COMPLETED", "FAILED", "REQUIRES_PASSWORD"].includes(matched.status)) {
+                        doneCounter++;
+                    }
+                }
+            });
+
+            progressBar.style.width = `${10 + (doneCounter / trackingIds.length) * 90}%`;
+            progressCount.textContent = `${doneCounter} / ${fileCount} [ PROCESSING ]`;
+
+            // Fetch terminal logs for the active jobs
+            let mergedLogs = [];
+            for (let tid of trackingIds) {
+                try {
+                    let logRes = await fetch(`${API_BASE}/jobs/${tid}/logs`);
+                    let lData = await logRes.json();
+                    mergedLogs = mergedLogs.concat(lData.logs.map(l => `[worker-${tid}] ${l}`));
+                } catch (e) { }
+            }
+
+            if (mergedLogs.length > previouslyRenderedLogs) {
+                const newLogs = mergedLogs.slice(previouslyRenderedLogs);
+                newLogs.forEach(lg => {
+                    termOut.innerHTML += `<div>${escapeHtml(lg)}</div>`;
+                });
+                previouslyRenderedLogs = mergedLogs.length;
+                termOut.scrollTop = termOut.scrollHeight;
+            }
+
+            // Refresh table automatically
+            allJobs = allJ;
+            renderJobsPage();
+
+            if (doneCounter === trackingIds.length) {
+                clearInterval(parsingInterval);
+                clearInterval(timerInterval);
+
+                progressTitle.innerHTML = `Complete!`;
+                progressCount.textContent = `${doneCounter} / ${fileCount}`;
+                progressBar.style.width = "100%";
+                showToast(`${doneCounter} document(s) finished processing`, "success");
+
+                if (typeof resultsSection !== "undefined") {
+                    resultsSection.hidden = true;
+                }
+                termOut.innerHTML += `<div>[system] Pipeline terminated successfully.</div>`;
+                termOut.scrollTop = termOut.scrollHeight;
+
+                setTimeout(() => {
+                    uploadProgress.hidden = true;
+                    progressBar.style.width = "0%";
+                }, 5000);
+            }
+        } catch (e) {
+            // Ignore network slips during poll
+        }
+    }, 500);
 }
 
 
@@ -774,10 +777,16 @@ const unlockJobId = document.getElementById("unlock-job-id");
 const cancelUnlockBtn = document.getElementById("cancel-unlock-btn");
 const submitUnlockBtn = document.getElementById("submit-unlock-btn");
 
+const passwordError = document.getElementById("password-error");
+
 function openUnlockModal(jobId) {
     if (!jobId) return;
     unlockJobId.value = jobId;
     passwordInput.value = '';
+    passwordInput.disabled = false;
+    submitUnlockBtn.disabled = false;
+    submitUnlockBtn.textContent = "Unlock";
+    if (passwordError) passwordError.textContent = '';
     passwordModal.showModal();
 }
 
@@ -792,7 +801,9 @@ passwordForm.addEventListener("submit", async (e) => {
     if (!password) return;
 
     submitUnlockBtn.disabled = true;
-    submitUnlockBtn.textContent = "Unlocking...";
+    submitUnlockBtn.innerHTML = `<svg class="spinner" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-dasharray="80" stroke-dashoffset="20"></circle></svg> Unlocking...`;
+    passwordInput.disabled = true;
+    if (passwordError) passwordError.textContent = '';
 
     try {
         const res = await fetch(`${API_BASE}/jobs/${jobId}/unlock`, {
@@ -804,18 +815,57 @@ passwordForm.addEventListener("submit", async (e) => {
         const data = await res.json();
 
         if (!res.ok) {
-            throw new Error(data.detail || "Failed to unlock document");
+            if (passwordError) {
+                passwordError.textContent = data.detail || "Failed to unlock document";
+            }
+            // Check permanent failure scenario
+            if (res.status === 400 && data.detail && data.detail.includes("Maximum password attempts")) {
+                passwordInput.disabled = true;
+                submitUnlockBtn.disabled = true;
+                submitUnlockBtn.textContent = "Locked";
+                passwordInput.value = '';
+                loadJobs(); // Refresh immediately to show FAILED status globally
+            } else {
+                passwordInput.disabled = false;
+                passwordInput.value = ''; // Clear for next try
+                passwordInput.focus();
+                submitUnlockBtn.disabled = false;
+                submitUnlockBtn.textContent = "Unlock";
+            }
+            return; // Exit early, leaving modal open
         }
 
         showToast("Document unlocked properly and is being processed", "success");
         passwordModal.close();
 
-        // Refresh the jobs table
-        loadJobs();
+        // Reveal the progress bar terminal block
+        uploadProgress.hidden = false;
+        const termOut = document.getElementById("terminal-output");
+        if (termOut) {
+            termOut.innerHTML = `<div>[system] Resuming job #${jobId}...</div>`;
+            termOut.innerHTML += `<div>[request] Sending unlock signal to origins...</div>`;
+        }
+
+        progressTitle.innerHTML = `Processing document... <span id="timer-display" style="font-family: monospace; font-weight: bold; margin-left:10px;">00:00.000</span>`;
+        progressCount.textContent = `0 / 1`;
+        progressBar.style.width = "10%";
+
+        clearInterval(timerInterval);
+        const startTime = Date.now();
+        timerInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const mins = String(Math.floor(elapsed / 60000)).padStart(2, '0');
+            const secs = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0');
+            const millis = String(elapsed % 1000).padStart(3, '0');
+            const d = document.getElementById("timer-display");
+            if (d) d.textContent = `${mins}:${secs}.${millis}`;
+        }, 47);
+
+        startJobTracking([parseInt(jobId, 10)], 1);
 
     } catch (err) {
-        showToast(err.message, "error");
-    } finally {
+        if (passwordError) passwordError.textContent = err.message || "Failed to unlock document";
+        passwordInput.disabled = false;
         submitUnlockBtn.disabled = false;
         submitUnlockBtn.textContent = "Unlock";
     }

@@ -869,6 +869,21 @@ body {
     border: 1px solid var(--border);
 }
 
+.spinner {
+    animation: spin 1s linear infinite;
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
     .navbar {

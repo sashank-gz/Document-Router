@@ -80,15 +80,29 @@ def _unlock_pdf(file_path: Path, password: str) -> bool:
         if not doc.authenticate(password):
             return False
         try:
-            doc.save(temp_path)
-        except Exception:
-            Path(temp_path).unlink(missing_ok=True)
-            return False
+            doc.save(temp_path, encryption=0)
+        except Exception as e:
+            logger.warning(f"PDF save failed: {e}. Trying secondary extraction.")
+            try:
+                doc2 = fitz.open()
+                doc2.insert_pdf(doc)
+                doc2.save(temp_path)
+                doc2.close()
+            except Exception as e2:
+                logger.error(f"Secondary PDF extraction failed: {e2}")
+                Path(temp_path).unlink(missing_ok=True)
+                return False
 
     try:
-        Path(temp_path).replace(file_path)
+        import shutil
+        import time
+
+        time.sleep(0.2)  # small buffer for OS file handle release
+        shutil.copy2(temp_path, file_path)
+        Path(temp_path).unlink(missing_ok=True)
         return True
-    except Exception:
+    except Exception as e:
+        logger.error(f"PDF replace failed: {e}")
         Path(temp_path).unlink(missing_ok=True)
         return False
 
@@ -117,7 +131,12 @@ def _unlock_msoffice(file_path: Path, password: str) -> bool:
             with open(temp_path, "wb") as f_out:
                 office_file.decrypt(f_out)
 
-        Path(temp_path).replace(file_path)
+        import shutil
+        import time
+
+        time.sleep(0.2)
+        shutil.copy2(temp_path, file_path)
+        Path(temp_path).unlink(missing_ok=True)
         return True
     except msoffcrypto.exceptions.DecryptionError:
         return False  # Wrong password
@@ -168,7 +187,12 @@ def _unlock_zip(file_path: Path, password: str) -> bool:
                     data = zf_in.read(item.filename)
                     zf_out.writestr(item.filename, data)
 
-        Path(temp_path).replace(file_path)
+        import shutil
+        import time
+
+        time.sleep(0.2)
+        shutil.copy2(temp_path, file_path)
+        Path(temp_path).unlink(missing_ok=True)
         return True
     except Exception as e:
         logger.error(f"ZIP unlock attempt failed structurally: {e}")

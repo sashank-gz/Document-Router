@@ -1,0 +1,15 @@
+Job 315: 72a050bbaf3a4c62a6e02f294169748d_13.2 protected_loss_run_data.xlsx - LOSS_RUN (llm)
+  T2 Score: 0.1923 | Matched: ['loss run', 'claim number', 'loss date', 'incurred', 'total:']
+  T2 text preview: Sheet Loss Run Data: Year Claim Number Occurrence ID Loss Date Reported Date Paid Amount Reserves To
+Job 314: c8178c9cd2c94ff7a20c64f4e412cb1b_01 sample_loss_runs_redacted_2.pdf - LOSS_RUN (both)
+  T2 Score: 0.5769 | Matched: ['loss run', 'claim number', 'policy number', 'loss date', 'insured name', 'paid loss', 'total paid', 'effective date', 'expiration date', 'claimant', 'claim description', 'ALAE', 'total # claims', 'totals:', 'total:']
+  T2 text preview: Run As Of: 0 9/1/ 3 024 2 0:50:36 AM Insured Name: Gpt 40 mini Policy Number: ABC123 Effective Date:
+Job 313: 74c927b7af874fe899353d6ad2a5731d_13.2 protected_loss_run_data.xlsx - LOSS_RUN (llm)
+  T2 Score: 0.1923 | Matched: ['loss run', 'claim number', 'loss date', 'incurred', 'total:']
+  T2 text preview: Sheet Loss Run Data: Year Claim Number Occurrence ID Loss Date Reported Date Paid Amount Reserves To
+Job 312: 91474db7d09f489da9f880e503409e3b_14.1 Protected_Loss_Run_Stacked_Headers_5yr_Full (1).docx - LOSS_RUN (llm)
+  T2 Score: 0.1923 | Matched: ['loss run', 'claim number', 'loss date', 'incurred', 'total:']
+  T2 text preview: # General Liability Loss Run — Full 5-Year Report (Stacked Headers) ## YEAR: 2025 No claims reported
+Job 311: 8e757dfc2f504fe89304defaace9cb21_13.2 protected_loss_run_data.xlsx - LOSS_RUN (llm)
+  T2 Score: 0.1923 | Matched: ['loss run', 'claim number', 'loss date', 'incurred', 'total:']
+  T2 text preview: Sheet Loss Run Data: Year Claim Number Occurrence ID Loss Date Reported Date Paid Amount Reserves To

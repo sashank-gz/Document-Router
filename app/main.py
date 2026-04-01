@@ -137,7 +137,7 @@ class UnlockRequest(BaseModel):
 
 
 @app.post("/jobs/{job_id}/unlock")
-def unlock_job(job_id: int, req: UnlockRequest) -> dict:
+def unlock_job(job_id: int, req: UnlockRequest, background_tasks: BackgroundTasks) -> dict:
     """Attempt to unlock a document job that requires a password."""
     import json
 
@@ -165,7 +165,16 @@ def unlock_job(job_id: int, req: UnlockRequest) -> dict:
         # Mark as unlocked and process it
         debug_info["password_unlocked"] = True
         job_store.update_job(job_id, status="UPLOADED", debug_info=json.dumps(debug_info))
-        return router_engine.continue_processing(job_id)
+
+        def process_job_with_context_resume(j_id: int):
+            token = active_job_context.set(j_id)
+            try:
+                router_engine.continue_processing(j_id)
+            finally:
+                active_job_context.reset(token)
+
+        background_tasks.add_task(process_job_with_context_resume, job_id)
+        return {"status": "ok", "message": "processing_resumed"}
 
     # Failed to unlock
     attempts += 1
